@@ -14,5 +14,4 @@ Her vises nøgletal om sampublicering på tværs af KU. For en dybdegående netv
 sampubliceringsappen.
 """)
 
-    st.divider()
     st.markdown(f"[Åbn sampubliceringsappen]({SAMPUBLICERING_URL})")

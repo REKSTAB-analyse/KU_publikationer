@@ -1,6 +1,6 @@
 import streamlit as st
 
-from data.loader import load_logo, logo_base64, load_publications
+from data.loader import load_logo, logo_base64, load_publications, _DEPLOY_DATE
 from components.sidepanel import render_sidepanel
 from config import TABS
 
@@ -8,8 +8,9 @@ import tabs.oversigt as tab_oversigt
 import tabs.output as tab_output
 import tabs.publikationsformer as tab_pubformer
 import tabs.forskningsprofil as tab_forskningsprofil
-import tabs.internationalt as tab_internationalt
+import tabs.eksternt as tab_eksternt
 import tabs.sampublicering as tab_sampublicering
+import tabs.datagrundlag as tab_datagrundlag
 
 def main():
     # --- Page config ---
@@ -54,11 +55,23 @@ def main():
     with tabs_dict["Forskningsprofil"]:
         tab_forskningsprofil.render(publications, filters)
  
-    with tabs_dict["Internationalt"]:
-        tab_internationalt.render(publications, filters)
+    with tabs_dict["Eksternt samarbejde"]:
+        tab_eksternt.render(publications, filters)
  
     with tabs_dict["Sampublicering"]:
         tab_sampublicering.render(publications, filters)
+    
+    with tabs_dict["Datagrundlag"]:
+        tab_datagrundlag.render(publications, filters)
+    
+    # Footer
+    st.markdown(f"""
+<hr style="margin-top: 50px;">
+<div style="text-align:center; color:#666; font-size: 0.9em;">
+  REKSTAB Analyse · Amanda Schramm Petersen · <a href="mailto:ascp@adm.ku.dk">ascp@adm.ku.dk</a>
+  · opdateret {_DEPLOY_DATE}
+</div>
+""", unsafe_allow_html=True)
 
 if __name__ == "__main__":
     main()

@@ -18,8 +18,6 @@ FAC_ABBRS = {
     "Det Sundhedsvidenskabelige Fakultet": "SUND"
 }
 
-
-
 # --- Stillingsgrupper ---
 STILLINGSGRUPPER = [
     "Professor",
@@ -101,8 +99,9 @@ TABS = [
     "Output",
     "Publikationsformer",
     "Forskningsprofil",
-    "Internationalt",
-    "Sampublicering"
+    "Eksternt samarbejde",
+    "Sampublicering",
+    "Datagrundlag",
 ]
 
 # --- Sampubliceringsapp URL ---
