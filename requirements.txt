@@ -1,1 +1,6 @@
-
+streamlit
+paramiko
+matplotlib
+pyarrow
+openpyxl
+plotly
