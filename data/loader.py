@@ -42,7 +42,7 @@ def _sync_parquet_from_erda():
 @st.cache_resource
 def _get_db_for_source(data_source: str):
     conn = duckdb.connect()
-    conn.execute(f"CREATE TABLE pubs AS SELECT * FROM read_parquet('{PARQUET_PATHS[data_source]}')")
+    conn.execute(f"CREATE VIEW pubs AS SELECT * FROM read_parquet('{PARQUET_PATHS[data_source]}')")
     return conn
 
 def set_active_data_source(data_source: str) -> None:
