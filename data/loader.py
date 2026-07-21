@@ -17,23 +17,27 @@ from config import FAC_ORDER, STILLINGSGRUPPER, PARQUET_PATHS, hier_cols, doi_fi
 def _sync_parquet_from_erda():
     """Henter de tre parquet-filer fra ERDA via SFTP ned på de stier,
     PARQUET_PATHS allerede peger på - resten af loader.py er uændret,
-    den læser stadig bare lokale filer bagefter. Gensynkroniserer højst
-    én gang i timen (ttl=3600), ikke ved hver eneste sideindlæsning."""
+    den læser stadig bare lokale filer bagefter."""
     erda = st.secrets["erda"]
 
+    print("[ERDA-sync] Forbinder til ERDA...", flush=True)
     transport = paramiko.Transport((erda["host"], erda.get("port", 22)))
     transport.connect(username=erda["username"], password=erda["password"])
     sftp = paramiko.SFTPClient.from_transport(transport)
+    print("[ERDA-sync] Forbundet.", flush=True)
 
     try:
         for data_source, local_path in PARQUET_PATHS.items():
             remote_filename = Path(local_path).name
             remote_path = f"{erda['data_path']}/{remote_filename}"
             Path(local_path).parent.mkdir(parents=True, exist_ok=True)
+            print(f"[ERDA-sync] Henter {remote_path} ...", flush=True)
             sftp.get(remote_path, local_path)
+            print(f"[ERDA-sync] Færdig: {local_path}", flush=True)
     finally:
         sftp.close()
         transport.close()
+        print("[ERDA-sync] Forbindelse lukket.", flush=True)
 
 @st.cache_resource
 def _get_db_for_source(data_source: str):
