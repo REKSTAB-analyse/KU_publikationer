@@ -2,6 +2,7 @@ import streamlit as st
 
 from data.loader import load_logo, logo_base64, _DEPLOY_DATE, load_org_volume
 from data.loader import load_filter_options, set_active_data_source
+from data.loader import _sync_parquet_from_erda
 from components.sidepanel import render_sidepanel
 from components.charts import fig_org_treemap, PLOTLY_CONFIG
 from components.colors import build_faculty_colors, stillingsgruppe_colors
@@ -23,6 +24,9 @@ def main():
         page_icon=load_logo(),
         layout="wide",
     )
+
+    # --- Synkroniser data fra ERDA, før noget forsøger at læse dem ---
+    _sync_parquet_from_erda()
 
     # --- Header: logo + titel ---
     col_logo, col_title = st.columns([1, 4])

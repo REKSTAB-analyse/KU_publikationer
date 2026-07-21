@@ -13,7 +13,7 @@ import paramiko
 
 from config import FAC_ORDER, STILLINGSGRUPPER, PARQUET_PATHS, hier_cols, doi_filter_sql, author_count_filter
 
-@st.cache_resource(ttl=3600)
+@st.cache_resource()
 def _sync_parquet_from_erda():
     """Henter de tre parquet-filer fra ERDA via SFTP ned på de stier,
     PARQUET_PATHS allerede peger på - resten af loader.py er uændret,

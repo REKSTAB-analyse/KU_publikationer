@@ -1,13 +1,20 @@
-""" vent til data er sat korrekt op
-# --- ERDA / SFTP ---
-_ERDA = st.secrets["erda"]
-DATA_PATH = _ERDA["data_path"]
-"""
+from pathlib import Path
+
+
 # --- Data ---
+"""
 PARQUET_PATHS = {
     "CURIS":    r"H:\Publikationsapp\Data\KU_pub_long.parquet",
     "OpenAlex": r"H:\Publikationsapp\Data\KU_pub_long_OpenAlex.parquet",
-    "SciVal":   r"H:\Publikationsapp\Data\KU_pub_long_SciVal.parquet",  # findes endnu ikke
+    "SciVal":   r"H:\Publikationsapp\Data\KU_pub_long_SciVal.parquet", 
+}
+"""
+_DATA_CACHE_DIR = Path(__file__).parent / "data_cache"
+
+PARQUET_PATHS = {
+    "CURIS":    str(_DATA_CACHE_DIR / "KU_pub_long.parquet"),
+    "OpenAlex": str(_DATA_CACHE_DIR / "KU_pub_long_OpenAlex.parquet"),
+    "SciVal":   str(_DATA_CACHE_DIR / "KU_pub_long_SciVal.parquet"),
 }
 
 # --- Fakulteter ---
