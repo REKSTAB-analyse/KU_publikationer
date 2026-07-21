@@ -6,3 +6,4 @@ openpyxl
 plotly
 duckdb
 pycountry
+psutil

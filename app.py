@@ -28,6 +28,10 @@ def main():
     # --- Synkroniser data fra ERDA, før noget forsøger at læse dem ---
     _sync_parquet_from_erda()
 
+    import psutil, os
+    _mem_mb = psutil.Process(os.getpid()).memory_info().rss / 1024 / 1024
+    print(f"[DEBUG] Hukommelse efter ERDA-sync: {_mem_mb:.0f} MB", flush=True)
+
     # --- Header: logo + titel ---
     col_logo, col_title = st.columns([1, 4])
     with col_logo:
@@ -78,6 +82,9 @@ Hold musen over hver boks for at se de præcise tal.
         fig = fig_org_treemap(_org_rows, _dims, build_faculty_colors(), stillingsgruppe_colors(), height=500)
         if fig is not None:
             st.plotly_chart(fig, width="stretch", config=PLOTLY_CONFIG)
+            
+    _mem_mb2 = psutil.Process(os.getpid()).memory_info().rss / 1024 / 1024
+    print(f"[DEBUG] Hukommelse efter treemap: {_mem_mb2:.0f} MB", flush=True)
     #"""
     
     # --- Faner ---
