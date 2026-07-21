@@ -2,13 +2,12 @@ from pathlib import Path
 
 
 # --- Data ---
-"""
-PARQUET_PATHS = {
-    "CURIS":    r"H:\Publikationsapp\Data\KU_pub_long.parquet",
-    "OpenAlex": r"H:\Publikationsapp\Data\KU_pub_long_OpenAlex.parquet",
-    "SciVal":   r"H:\Publikationsapp\Data\KU_pub_long_SciVal.parquet", 
-}
-"""
+#PARQUET_PATHS = {
+ #   "CURIS":    r"H:\Publikationsapp\Data\KU_pub_long.parquet",
+  #  "OpenAlex": r"H:\Publikationsapp\Data\KU_pub_long_OpenAlex.parquet",
+   # "SciVal":   r"H:\Publikationsapp\Data\KU_pub_long_SciVal.parquet", 
+#}
+
 _DATA_CACHE_DIR = Path(__file__).parent / "data_cache"
 
 PARQUET_PATHS = {
