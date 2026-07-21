@@ -5,5 +5,5 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 import streamlit as st
  
  
-def render(publications, filters):
+def render(filters):
     st.error("Indhold kommer her.")

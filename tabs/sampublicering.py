@@ -5,7 +5,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 import streamlit as st
 from config import SAMPUBLICERING_URL
 
-def render(publications: list[dict], filters: dict) -> None:
+def render(filters: dict) -> None:
     st.subheader("Sampublicering")
 
     st.markdown(

@@ -1,2 +1,4 @@
 [theme]
 primaryColor = "#901a1E"
+[server]
+maxMessageSize = 5000

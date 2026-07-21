@@ -5,6 +5,8 @@ from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
 
+import streamlit as st
+
 def build_table(rows: list, schema_fields: list) -> pa.Table:
     cols   = {name: [r.get(name) for r in rows] for name, _ in schema_fields}
     arrays = [pa.array(cols[name], type=dtype) for name, dtype in schema_fields]
@@ -77,3 +79,60 @@ def fmt_ui(value, decimals=1):
         return ""
     fmt = f"{{:.{decimals}f}}"
     return fmt.format(value)
+
+def render_table_export(
+    data: dict,
+    row_label: str = "Enhed",
+    col_order: list = None,
+    col_labels: dict = None,
+    filename: str = "data.xlsx",
+    sheet_name: str = "Data",
+    key: str = None,
+) -> None:
+    """
+    Viser en "Se tabel"-expander med en tabel (kolonner i header, "row_label" som
+    første kolonne) samt en "Download (.xlsx)"-knap.
+
+    data: {row_navn: {kolonne: værdi}}, fx
+          {"Forfatterpar (netværk)": {2021: 1863, 2022: 1900, ...}, ...}
+          eller {"HUM": {"Open": 45.2, "Closed": 17.7, ...}, ...}
+    col_order:  rækkefølge af kolonner. Default: sorteret automatisk.
+    col_labels: {kolonne: visningsnavn}, fx OA_LABELS, hvis rå nøgler ikke skal
+                bruges direkte som kolonneoverskrifter.
+    key:        skal være unik pr. kald, hvis funktionen bruges flere gange på
+                samme side (fx "Antal" og "Andel (%)" for samme chart).
+    """
+    if not data:
+        return
+
+    if col_order is None:
+        cols = sorted({c for row in data.values() for c in row.keys()}, key=str)
+    else:
+        cols = col_order
+
+    col_labels  = col_labels or {}
+    header_cols = [col_labels.get(c, str(c)) for c in cols]
+    field_order = [row_label] + header_cols
+
+    rows = [
+        {
+            row_label: row_name,
+            **{
+                col_labels.get(c, str(c)): (row.get(c) if row.get(c) is not None else 0)
+                for c in cols
+            },
+        }
+        for row_name, row in data.items()
+    ]
+
+    with st.expander("Se tabel"):
+        st.dataframe(rows, hide_index=True, width="stretch")
+
+        excel_bytes = rows_to_excel_bytes(rows, field_order, sheet_name=sheet_name)
+        st.download_button(
+            "Download (.xlsx)",
+            data=excel_bytes,
+            file_name=filename,
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            key=key or f"dl_{sheet_name}_{filename}",
+        )
