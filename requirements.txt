@@ -5,3 +5,4 @@ pyarrow
 openpyxl
 plotly
 duckdb
+pycountry
