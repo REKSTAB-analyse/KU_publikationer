@@ -648,7 +648,8 @@ valgte organisatoriske niveauer.
 
 Fanerne nedenfor viser, hvordan sammensætningen inden for hver dimension har udviklet sig
 over tid. Graferne dækker altid **hele den tilgængelige periode**, uanset det valgte årsinterval - 
-sidepanelets øvrige filtre gælder stadig. 
+sidepanelets øvrige filtre gælder stadig. Er intet valgt i sidepanelet, dækker graferne hele 
+KU; er f.eks. kun HUM valgt, viser graferne udelukkende udviklingen for HUM. 
 """)
 
 

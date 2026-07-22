@@ -314,7 +314,7 @@ def _render_fwci_trend(filters):
         line=dict(color="#901a1e", width=2.5),
         marker=dict(size=6),
         customdata=[trend_data[y]["n"] for y in shown_years],
-        hovertemplate="<b>%{x}</b><br>Gennemsnitlig FWCI: %{y:.2f}<br>%{customdata:,} publikationer<extra></extra>",
+        hovertemplate="<b>%{x}</b><br>Gennemsnitlig FWCI: %{y:.2f}<br>Baseret på %{customdata:,} publikationer<extra></extra>",
     ))
     fig.update_layout(
         title=dict(text="Gennemsnitlig FWCI over tid (hele perioden)", font=dict(size=14)),
@@ -432,7 +432,8 @@ som **standard** de seneste {IMMATURE_YEARS_DEFAULT} år - kryds boksen under gr
 du vil se dem alligevel.
 
 Graferne dækker altid hele den tilgængelige periode, uanset sidepanelets valgte årsinterval - 
-øvrige filtre gælder stadig.
+øvrige filtre gælder stadig. Er intet valgt i sidepanelet, dækker graferne hele 
+KU; er f.eks. kun HUM valgt, viser graferne udelukkende udviklingen for HUM. 
 """
     )
     _render_fwci_trend(filters)

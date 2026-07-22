@@ -106,7 +106,8 @@ def fig_hbar_stacked(
     mode: str = "antal",
     group_keys: list = None,
     legend_position: str = "bottom",
-    pct_denominators: dict = None,   # NY: eksplicit nævner pr. y-værdi til pct-beregning
+    pct_denominators: dict = None,
+    hover_unit: str = "publikationer",   # NY: styrer ordet i selve hover-teksten
 ) -> go.Figure:
     if order is None:
         totals = {}
@@ -161,9 +162,9 @@ def fig_hbar_stacked(
             continue
 
         if mode == "rate":
-            value_hover = "%{customdata[0]:.2f} publikationer pr. forfatter<br>"
+            value_hover = f"%{{customdata[0]:.2f}} {hover_unit} pr. forfatter<br>"
         else:
-            value_hover = "%{customdata[0]:,} publikationer<br>"
+            value_hover = f"%{{customdata[0]:,}} {hover_unit}<br>"
 
         fig.add_trace(go.Bar(
             name=labels.get(key, str(key)),
@@ -468,7 +469,8 @@ def fig_country_choropleth(data: dict, title: str = "", bins: list = None) -> tu
 def fig_year_trend(
     data: dict, order: list, colors: dict = None, labels: dict = None,
     title: str = "", yaxis_title: str = "Antal", mode: str = "antal",
-    pct_denominators: dict = None,   # NY: eksplicit nævner pr. år
+    pct_denominators: dict = None,
+    hover_unit: str = "publikationer",   # NY: styrer ordet i selve hover-teksten
 ) -> go.Figure:
 
     years = sorted(data.keys())
@@ -510,7 +512,7 @@ def fig_year_trend(
             customdata=hover_vals,
             hovertemplate=(
                 f"<b>{labels.get(key, key)}</b><br>%{{x}}<br>"
-                + ("%{y}%<br>%{customdata:,} publikationer" if mode == "pct" else "%{y:,} publikationer")
+                + (f"%{{y}}%<br>%{{customdata:,}} {hover_unit}" if mode == "pct" else f"%{{y:,}} {hover_unit}")
                 + "<extra></extra>"
             ),
         ))

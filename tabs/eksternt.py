@@ -498,7 +498,7 @@ def _query_country_count_trend(filters):
 
 def _render_section(filters, mode, data, cluster_map, title_prefix, order=None, colors=None, labels=None,
                      chart_mode="antal", legend_position="right", top_x=None, always_keep=None,
-                     xaxis_title="Antal publikationer", pct_denominators=None):
+                     xaxis_title="Antal publikationer", pct_denominators=None, hover_unit="publikationer"):
     
     if not any(data.values()):
         st.error("Ingen publikationer matcher de valgte filtre.")
@@ -529,9 +529,9 @@ def _render_section(filters, mode, data, cluster_map, title_prefix, order=None, 
     fig = fig_hbar_stacked(
         data=data, order=order, colors=colors, labels=labels,
         title=f"{title_prefix}, {breakdown_label(mode)}, {year_range_label(filters['aar_fra'], filters['aar_til'])}",
-        xaxis_title="Antal publikationer", mode=chart_mode,
+        xaxis_title=xaxis_title, mode=chart_mode,
         group_keys=group_keys, legend_position=legend_position,
-        pct_denominators=pct_denominators,
+        pct_denominators=pct_denominators, hover_unit=hover_unit,
     )
     st.plotly_chart(fig, width="stretch", config=PLOTLY_CONFIG)
     
@@ -682,6 +682,12 @@ i sidepanelet.
 """
 Figurene nedenfor viser, hvilke lande KU's eksterne medforfattere kommer fra, fordelt på de valgte organisatoriske
 enheder - samme opgørelse som kortet ovenfor, bare brudt ned per enhed. 
+
+**Andel (%) angiver andelen af enhedens publikationer, ikke andelen af forfattere**: for SCIENCE 
+kunne det for eksempel betyde, at 1% af SCIENCE's publikationer har mindst én ekstern medforfatter
+fra Storbritannien - ikke at 1% af alle forfattere (interne og eksterne tilsammen) på SCIENCE's
+publikationer er britiske. En publikation med flere medforfattere fra samme land tælles kun med 
+én gang.
 """)
 
     _land_data, _land_cm = _query_land_by_org(filters, mode)
@@ -736,7 +742,7 @@ hvor mange forskellige lande hver enhed samarbejder med.
         _render_section(
             filters, mode, _country_wrapped, _country_cm, "Antal samarbejdslande",
             order=["Lande"], colors={"Lande": "#901a1e"}, labels={"Lande": "Antal lande"},
-            chart_mode="antal", xaxis_title="Antal lande",
+            chart_mode="antal", xaxis_title="Antal lande", hover_unit="lande",
         )
     
     st.markdown(
@@ -746,7 +752,9 @@ hvor mange forskellige lande hver enhed samarbejder med.
 #### Udvikling over tid
 
 Graferne nedenfor dækker altid hele den tilgængelige periode, uanset sidepanelets
-valgte årsinterval - øvrige filtre gælder stadig.
+valgte årsinterval - øvrige filtre gælder stadig, inklusiv valg af fakultet/institut. Er intet
+valgt i sidepanelet, dækker graferne hele KU; er f.eks. kun HUM valgt, viser graferne udelukkende
+udviklingen for HUM. 
 """
     )
     _tab_trend_land, _tab_trend_ekst, _tab_trend_antal_land = st.tabs(
