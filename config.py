@@ -1,20 +1,27 @@
 from pathlib import Path
+import streamlit as st
 
+try:
+    ERDA_ENABLED = st.secrets.get("erda", {}).get("use_erda", True)
+except Exception:
+    ERDA_ENABLED = True
 
 # --- Data ---
-#PARQUET_PATHS = {
- #   "CURIS":    r"H:\Publikationsapp\Data\KU_pub_long.parquet",
-  #  "OpenAlex": r"H:\Publikationsapp\Data\KU_pub_long_OpenAlex.parquet",
-   # "SciVal":   r"H:\Publikationsapp\Data\KU_pub_long_SciVal.parquet", 
-#}
-
-_DATA_CACHE_DIR = Path(__file__).parent / "data_cache"
-
-PARQUET_PATHS = {
-    "CURIS":    str(_DATA_CACHE_DIR / "KU_pub_long.parquet"),
-    "OpenAlex": str(_DATA_CACHE_DIR / "KU_pub_long_OpenAlex.parquet"),
-    "SciVal":   str(_DATA_CACHE_DIR / "KU_pub_long_SciVal.parquet"),
-}
+if ERDA_ENABLED:
+    # Cloud/delt brug: filerne hentes fra ERDA ned i dette lokale mellemlager
+    _DATA_CACHE_DIR = Path(__file__).parent / "data_cache"
+    PARQUET_PATHS = {
+        "CURIS":    str(_DATA_CACHE_DIR / "KU_pub_long.parquet"),
+        "OpenAlex": str(_DATA_CACHE_DIR / "KU_pub_long_OpenAlex.parquet"),
+        "SciVal":   str(_DATA_CACHE_DIR / "KU_pub_long_SciVal.parquet"),
+    }
+else:
+    # Lokal udvikling: læs direkte fra dine egne, allerede byggede filer
+    PARQUET_PATHS = {
+        "CURIS":    r"H:\Publikationsapp\Data\KU_pub_long.parquet",
+        "OpenAlex": r"H:\Publikationsapp\Data\KU_pub_long_OpenAlex.parquet",
+        "SciVal":   r"H:\Publikationsapp\Data\KU_pub_long_SciVal.parquet",
+    }
 
 # --- Fakulteter ---
 FAC_ORDER = ["SAMF", "SCIENCE", "TEO", "SUND", "HUM", "JUR"]

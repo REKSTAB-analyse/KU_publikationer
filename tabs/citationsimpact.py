@@ -143,13 +143,20 @@ def _query_top10_by_org(filters, mode):
         result[dim_label][cat] = n
     
     if mode == "F" and show_ku_samlet(filters):
-        ku_total = {}
-        for dim_data in result.values():
-            for cat, n in dim_data.items():
-                ku_total[cat] = ku_total.get(cat, 0) + n
-        result = {"KU samlet": ku_total, **result}
+        ku_sql = f"""
+            WITH distinct_pubs AS (
+                SELECT DISTINCT PURE_ID, {top10_col} AS is_top10
+                FROM pubs
+                {where_sql}
+                AND {top10_col} IS NOT NULL
+            )
+            SELECT CASE WHEN is_top10 THEN 'Top 10%' ELSE 'Øvrige' END AS cat, COUNT(*) AS n
+            FROM distinct_pubs
+            GROUP BY 1
+        """
+        ku_rows = get_cursor().execute(ku_sql, params).fetchall()
+        result = {"KU samlet": dict(ku_rows), **result}
         cluster_map = {"KU samlet": None, **cluster_map}
-
 
     return result, cluster_map
 

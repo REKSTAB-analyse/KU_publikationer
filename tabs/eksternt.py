@@ -42,10 +42,7 @@ def _query_section(filters, mode, category_sql):
     
     ac_sql, ac_params = author_count_filter(filters['min_forfattere'], filters['max_forfattere'])
 
-    sql = f"""
-        SELECT {select_dims}({category_sql}) AS cat,
-               COUNT(DISTINCT PURE_ID) AS n
-        FROM pubs
+    where_sql = f"""
         WHERE Intern      = 'Intern'
           AND Fak         IN ({ph(filters['fakultet'])})
           AND Inst        IN ({ph(filters['institutter'])})
@@ -58,17 +55,23 @@ def _query_section(filters, mode, category_sql):
           AND COALESCE(Open_Access, 'Unknown') IN ({ph(filters['open_access'])})
           AND Year        BETWEEN ? AND ?
           AND ({ac_sql})
-        GROUP BY {group_by}
-        ORDER BY {order_by_sql}
     """
-    params = (
+    base_params = (
         filters['fakultet'] + filters['institutter'] + filters['stillingsgrupper'] +
         filters['typer'] + filters['sprog'] +
         filters['peer'] + filters['indholdstyper'] + filters['open_access'] +
         [filters['aar_fra'], filters['aar_til']] + ac_params
     )
 
-    rows = get_cursor().execute(sql, params).fetchall()
+    sql = f"""
+        SELECT {select_dims}({category_sql}) AS cat,
+               COUNT(DISTINCT PURE_ID) AS n
+        FROM pubs
+        {where_sql}
+        GROUP BY {group_by}
+        ORDER BY {order_by_sql}
+    """
+    rows = get_cursor().execute(sql, base_params).fetchall()
 
     result, cluster_map = {}, {}
     for row in rows:
@@ -83,11 +86,18 @@ def _query_section(filters, mode, category_sql):
         result[dim_label][cat] = result[dim_label].get(cat, 0) + n
     
     if mode == "F" and show_ku_samlet(filters):
-        ku_total = {}
-        for dim_data in result.values():
-            for cat, n in dim_data.items():
-                ku_total[cat] = ku_total.get(cat, 0) + n
-        result = {"KU samlet": ku_total, **result}
+        # Selvstændig optælling, IKKE summen af fakultets-rækkerne - en
+        # publikation med interne medforfattere fra flere fakulteter ville
+        # ellers blive dobbelt-talt i "KU samlet", samme princip som
+        # load_author_counts allerede håndterer korrekt for forfattere.
+        ku_sql = f"""
+            SELECT ({category_sql}) AS cat, COUNT(DISTINCT PURE_ID) AS n
+            FROM pubs
+            {where_sql}
+            GROUP BY 1
+        """
+        ku_rows = get_cursor().execute(ku_sql, base_params).fetchall()
+        result = {"KU samlet": dict(ku_rows), **result}
     
     return result, cluster_map
 
@@ -107,12 +117,7 @@ def _query_land_by_org(filters, mode):
 
     ac_sql, ac_params = author_count_filter(filters['min_forfattere'], filters['max_forfattere'], alias="i.")
 
-    sql = f"""
-        SELECT {select_dims},
-               CASE WHEN e.Land = 'Unknown' THEN 'Ukendt' ELSE e.Land END AS cat,
-               COUNT(DISTINCT i.PURE_ID) AS n
-        FROM pubs i
-        JOIN pubs e ON i.PURE_ID = e.PURE_ID
+    where_sql = f"""
         WHERE i.Intern      = 'Intern'
           AND i.Fak         IN ({ph(filters['fakultet'])})
           AND i.Inst        IN ({ph(filters['institutter'])})
@@ -126,17 +131,25 @@ def _query_land_by_org(filters, mode):
           AND i.Year        BETWEEN ? AND ?
           AND ({ac_sql})
           AND e.Intern = 'Ekstern' AND e.Land IS NOT NULL AND e.Land != ''
-        GROUP BY {group_by}
-        ORDER BY {order_by_sql}
     """
-    params = (
+    base_params = (
         filters['fakultet'] + filters['institutter'] + filters['stillingsgrupper'] +
         filters['typer'] + filters['sprog'] +
         filters['peer'] + filters['indholdstyper'] + filters['open_access'] +
         [filters['aar_fra'], filters['aar_til']] + ac_params
     )
 
-    rows = get_cursor().execute(sql, params).fetchall()
+    sql = f"""
+        SELECT {select_dims},
+               CASE WHEN e.Land = 'Unknown' THEN 'Ukendt' ELSE e.Land END AS cat,
+               COUNT(DISTINCT i.PURE_ID) AS n
+        FROM pubs i
+        JOIN pubs e ON i.PURE_ID = e.PURE_ID
+        {where_sql}
+        GROUP BY {group_by}
+        ORDER BY {order_by_sql}
+    """
+    rows = get_cursor().execute(sql, base_params).fetchall()
 
     result, cluster_map = {}, {}
     for row in rows:
@@ -151,11 +164,16 @@ def _query_land_by_org(filters, mode):
         result[dim_label][cat] = result[dim_label].get(cat, 0) + n
 
     if mode == "F" and show_ku_samlet(filters):
-        ku_total = {}
-        for dim_data in result.values():
-            for cat, n in dim_data.items():
-                ku_total[cat] = ku_total.get(cat, 0) + n
-        result = {"KU samlet": ku_total, **result}
+        ku_sql = f"""
+            SELECT CASE WHEN e.Land = 'Unknown' THEN 'Ukendt' ELSE e.Land END AS cat,
+                   COUNT(DISTINCT i.PURE_ID) AS n
+            FROM pubs i
+            JOIN pubs e ON i.PURE_ID = e.PURE_ID
+            {where_sql}
+            GROUP BY 1
+        """
+        ku_rows = get_cursor().execute(ku_sql, base_params).fetchall()
+        result = {"KU samlet": dict(ku_rows), **result}
 
     return result, cluster_map
 

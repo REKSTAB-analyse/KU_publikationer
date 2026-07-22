@@ -78,10 +78,7 @@ def _query_section(filters, mode, category_sql):
     
     ac_sql, ac_params = author_count_filter(filters['min_forfattere'], filters['max_forfattere'])
 
-    sql = f"""
-        SELECT {select_dims}({category_sql}) AS cat,
-               COUNT(DISTINCT PURE_ID) AS n
-        FROM pubs
+    where_sql = f"""
         WHERE Intern      = 'Intern'
           AND Fak         IN ({ph(filters['fakultet'])})
           AND Inst        IN ({ph(filters['institutter'])})
@@ -94,17 +91,23 @@ def _query_section(filters, mode, category_sql):
           AND COALESCE(Open_Access, 'Unknown') IN ({ph(filters['open_access'])})
           AND Year        BETWEEN ? AND ?
           AND ({ac_sql})
-        GROUP BY {group_by}
-        ORDER BY {order_by_sql}
     """
-    params = (
+    base_params = (
         filters['fakultet'] + filters['institutter'] + filters['stillingsgrupper'] +
         filters['typer'] + filters['sprog'] +
         filters['peer'] + filters['indholdstyper'] + filters['open_access'] +
         [filters['aar_fra'], filters['aar_til']] + ac_params
     )
 
-    rows = get_cursor().execute(sql, params).fetchall()
+    sql = f"""
+        SELECT {select_dims}({category_sql}) AS cat,
+               COUNT(DISTINCT PURE_ID) AS n
+        FROM pubs
+        {where_sql}
+        GROUP BY {group_by}
+        ORDER BY {order_by_sql}
+    """
+    rows = get_cursor().execute(sql, base_params).fetchall()
 
     result, cluster_map = {}, {}
     for row in rows:
@@ -120,11 +123,14 @@ def _query_section(filters, mode, category_sql):
         result[dim_label][cat] = result[dim_label].get(cat, 0) + n
     
     if mode == "F" and show_ku_samlet(filters):
-        ku_total = {}
-        for dim_data in result.values():
-            for cat, n in dim_data.items():
-                ku_total[cat] = ku_total.get(cat, 0) + n
-        result = {"KU samlet": ku_total, **result}
+        ku_sql = f"""
+            SELECT ({category_sql}) AS cat, COUNT(DISTINCT PURE_ID) AS n
+            FROM pubs
+            {where_sql}
+            GROUP BY 1
+        """
+        ku_rows = get_cursor().execute(ku_sql, base_params).fetchall()
+        result = {"KU samlet": dict(ku_rows), **result}
     
     if mode == "I":
         result = dict(sorted(result.items(), key=lambda kv: -sum(kv[1].values())))
