@@ -7,9 +7,11 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
  
 import streamlit as st
 from data.loader import get_cursor
-from components.charts import fig_hbar_stacked, PLOTLY_CONFIG, domain_shaded_colors, _DOMAIN_COLORS, _hls_gradient
+import plotly.graph_objects as go
+from components.charts import fig_hbar_stacked, fig_year_trend, PLOTLY_CONFIG, domain_shaded_colors, _DOMAIN_COLORS, _hls_gradient
 from components.export import render_table_export
-from components.colors import ku_color_sequence
+from components.colors import ku_color_sequence, build_faculty_colors
+from config import FAC_ORDER
 from config import hier_cols, breakdown_label, doi_filter_sql, year_range_label, author_count_filter, show_ku_samlet
 
 _ASJC_FIELD_TO_DOMAIN = {
@@ -296,6 +298,257 @@ def _asjc_pct_denominators(filters):
     ASJC-dækning trækker derfor alle procenttal nedad."""
     data, _ = _query_topic_section(filters, "'Alle'")
     return {unit: sum(cats.values()) for unit, cats in data.items()}
+
+@st.cache_data
+def _query_category_year_trend(filters, category_sql, category_value, extra_filter_sql="1=1", extra_filter_params=()):
+    """
+    Antal publikationer år for år for ÉN specifik, allerede klikket
+    kategoriværdi - brudt ned på PRÆCIS det organisatoriske niveau, du har
+    valgt i sidepanelet (Fak, Inst, eller begge) - samme princip som resten
+    af fanens søjlediagrammer, ingen kunstig begrænsning til kun fakultet.
+    Vælger du intet i sidepanelet, vises kun 'KU samlet'. Ignorerer bevidst
+    sidepanelets årsinterval, samme princip som appens øvrige 'over
+    tid'-sektioner.
+    """
+    ph = lambda lst: ", ".join(["?" for _ in lst])
+    dims = hier_cols(filters.get("mode", "F"))
+    n_dims = len(dims)
+    ac_sql, ac_params = author_count_filter(filters['min_forfattere'], filters['max_forfattere'])
+
+    dim_select = (", ".join(f"{col} AS dim_{i}" for i, col in enumerate(dims)) + ", ") if dims else ""
+
+    sql = f"""
+        SELECT {dim_select}Year, COUNT(DISTINCT PURE_ID) AS n
+        FROM pubs
+        WHERE Intern       = 'Intern'
+          AND Fak          IN ({ph(filters['fakultet'])})
+          AND Inst         IN ({ph(filters['institutter'])})
+          AND Stil         IN ({ph(filters['stillingsgrupper'])})
+          AND Type        IN ({ph(filters['typer'])})
+          AND Sprog       IN ({ph(filters['sprog'])})
+          AND Peer_review IN ({ph(filters['peer'])})
+          AND Indholdstype IN ({ph(filters['indholdstyper'])})
+          AND ({doi_filter_sql(filters['har_doi'])})
+          AND COALESCE(Open_Access, 'Unknown') IN ({ph(filters['open_access'])})
+          AND Year IS NOT NULL
+          AND ({ac_sql})
+          AND ({extra_filter_sql})
+          AND ({category_sql}) = ?
+        GROUP BY {", ".join(str(i) for i in range(1, n_dims + 2)) if dims else "1"}
+        ORDER BY {n_dims + 1 if dims else 1}
+    """
+    params = (
+        filters['fakultet'] + filters['institutter'] + filters['stillingsgrupper'] +
+        filters['typer'] + filters['sprog'] + filters['peer'] +
+        filters['indholdstyper'] + filters['open_access'] +
+        ac_params + list(extra_filter_params) + [category_value]
+    )
+    rows = get_cursor().execute(sql, params).fetchall()
+
+    by_year_unit = {}
+    for row in rows:
+        dim_values = row[:n_dims]
+        year = row[n_dims]
+        n = row[n_dims + 1]
+        unit_label = " | ".join(str(v) for v in reversed(dim_values)) if dim_values else "KU samlet"
+        by_year_unit.setdefault(year, {})[unit_label] = n
+
+    if filters.get("mode", "F") == "F" and show_ku_samlet(filters):
+        merged = {year: {"KU samlet": sum(cats.values())} for year, cats in by_year_unit.items()}
+        return merged
+
+    return by_year_unit
+
+
+@st.cache_data
+def _query_asjc_category_year_trend(filters, level, category_value, restrict_domain=None, restrict_field_abbr=None):
+    """Samme princip som _query_category_year_trend (respekterer sidepanelets
+    reelle organisatoriske niveau, inkl. institut), men til ASJC's
+    flerværdi-felter."""
+    ph = lambda lst: ", ".join(["?" for _ in lst])
+    dims = hier_cols(filters.get("mode", "F"))
+    n_dims = len(dims)
+    ac_sql, ac_params = author_count_filter(filters['min_forfattere'], filters['max_forfattere'])
+
+    dim_select = (", ".join(f"{col} AS dim_{i}" for i, col in enumerate(dims)) + ", ") if dims else ""
+
+    base_where = f"""
+        WHERE Intern       = 'Intern'
+          AND Fak          IN ({ph(filters['fakultet'])})
+          AND Inst         IN ({ph(filters['institutter'])})
+          AND Stil         IN ({ph(filters['stillingsgrupper'])})
+          AND Type        IN ({ph(filters['typer'])})
+          AND Sprog       IN ({ph(filters['sprog'])})
+          AND Peer_review IN ({ph(filters['peer'])})
+          AND Indholdstype IN ({ph(filters['indholdstyper'])})
+          AND ({doi_filter_sql(filters['har_doi'])})
+          AND COALESCE(Open_Access, 'Unknown') IN ({ph(filters['open_access'])})
+          AND Year IS NOT NULL
+          AND ({ac_sql})
+          AND ASJC_felter IS NOT NULL AND ASJC_felter != ''
+    """
+    base_params = (
+        filters['fakultet'] + filters['institutter'] + filters['stillingsgrupper'] +
+        filters['typer'] + filters['sprog'] + filters['peer'] +
+        filters['indholdstyper'] + filters['open_access'] + ac_params
+    )
+
+    domain_case = _case_expr("felt_abbr", _ASJC_FIELD_TO_DOMAIN)
+    field_case = _case_expr("felt_abbr", _ASJC_FIELD_NAMES)
+    value_expr = domain_case if level == "domain" else field_case
+
+    restrict_sql, restrict_params = "", []
+    if restrict_domain:
+        restrict_sql = f"AND {domain_case} = ?"
+        restrict_params = [restrict_domain]
+    elif restrict_field_abbr:
+        restrict_sql = "AND felt_abbr = ?"
+        restrict_params = [restrict_field_abbr]
+
+    sql = f"""
+        WITH exploded AS (
+            SELECT {dim_select}Year, PURE_ID, TRIM(UNNEST(STRING_SPLIT(ASJC_felter, '|'))) AS felt_abbr
+            FROM pubs
+            {base_where}
+        )
+        SELECT {dim_select}Year, COUNT(DISTINCT PURE_ID) AS n
+        FROM exploded
+        WHERE {value_expr} = ? {restrict_sql}
+        GROUP BY {", ".join(str(i) for i in range(1, n_dims + 2)) if dims else "1"}
+        ORDER BY {n_dims + 1 if dims else 1}
+    """
+    params = base_params + [category_value] + restrict_params
+    rows = get_cursor().execute(sql, params).fetchall()
+
+    by_year_unit = {}
+    for row in rows:
+        dim_values = row[:n_dims]
+        year = row[n_dims]
+        n = row[n_dims + 1]
+        unit_label = " | ".join(str(v) for v in reversed(dim_values)) if dim_values else "KU samlet"
+        by_year_unit.setdefault(year, {})[unit_label] = n
+
+    if filters.get("mode", "F") == "F" and show_ku_samlet(filters):
+        merged = {year: {"KU samlet": sum(cats.values())} for year, cats in by_year_unit.items()}
+        return merged
+
+    return by_year_unit
+
+
+def _render_category_trend(trend_data, label, key_suffix, chart_mode="antal", year_totals=None):
+    """
+    Historik-graf under et klikket niveau - én linje pr. organisatorisk
+    enhed, matchende sidepanelets aktuelle niveau. chart_mode styrer om
+    y-aksen viser rå antal eller andel af enhedens samlede publikationer
+    det år (kræver year_totals fra _query_org_year_totals).
+    """
+    if not trend_data:
+        return
+    years_sorted = sorted(trend_data.keys())
+    units = sorted({u for cats in trend_data.values() for u in cats}, key=lambda u: (u != "KU samlet", u))
+
+    faculty_colors = build_faculty_colors()
+    palette = ku_color_sequence(len(units))
+    colors = {}
+    for i, u in enumerate(units):
+        if u == "KU samlet":
+            colors[u] = "#901a1e"
+        elif u in FAC_ORDER:
+            colors[u] = faculty_colors.get(u, "#666666")
+        else:
+            colors[u] = palette[i]
+
+    fig = go.Figure()
+    for unit in units:
+        raw_vals = [trend_data.get(year, {}).get(unit, 0) for year in years_sorted]
+        if chart_mode == "pct" and year_totals:
+            y_vals = [
+                round(100 * raw / year_totals.get(year, {}).get(unit, 1), 1) if year_totals.get(year, {}).get(unit, 0) > 0 else 0
+                for raw, year in zip(raw_vals, years_sorted)
+            ]
+            hover_suffix = "%{customdata[0]:.1f}%<br>%{customdata[1]:,} publikationer"
+            customdata = list(zip(y_vals, raw_vals))
+        else:
+            y_vals = raw_vals
+            hover_suffix = "%{y:,} publikationer"
+            customdata = None
+
+        fig.add_trace(go.Scatter(
+            x=years_sorted, y=y_vals, mode="lines+markers", name=unit,
+            line=dict(color=colors.get(unit, "#666666"), width=3 if unit == "KU samlet" else 2),
+            marker=dict(size=6),
+            customdata=customdata,
+            hovertemplate=f"<b>{unit}</b><br>%{{x}}<br>{hover_suffix}<extra></extra>",
+        ))
+    fig.update_layout(
+        title=dict(text=f"{label} over tid (hele perioden)", font=dict(size=14)),
+        xaxis=dict(title="Udgivelsesår", dtick=1),
+        yaxis=dict(
+            title="Andel af publikationer (%)" if chart_mode == "pct" else "Antal publikationer",
+            range=[0, 100] if chart_mode == "pct" else None,
+        ),
+        plot_bgcolor="white", height=380,
+        legend=dict(orientation="h", yanchor="top", y=-0.2, xanchor="left", x=0),
+        margin=dict(t=50, b=70, l=10, r=10),
+    )
+    st.plotly_chart(fig, width="stretch", config=PLOTLY_CONFIG, key=f"trend_chart_{key_suffix}")
+
+    if units == ["KU samlet"]:
+        st.caption(
+            "Viser KU samlet, fordi intet fakultet/institut er valgt i sidepanelet - "
+            "vælg et eller flere for at se udviklingen for specifikke organisatoriske niveauer."
+        )
+
+
+@st.cache_data
+def _query_org_year_totals(filters):
+    """Totalt antal publikationer år for år, pr. organisatorisk enhed
+    (matchende sidepanelets niveau) - INGEN kategori-restriktion. Bruges
+    som nævner til historik-plottets Andel (%)-tilstand."""
+    ph = lambda lst: ", ".join(["?" for _ in lst])
+    dims = hier_cols(filters.get("mode", "F"))
+    n_dims = len(dims)
+    ac_sql, ac_params = author_count_filter(filters['min_forfattere'], filters['max_forfattere'])
+    dim_select = (", ".join(f"{col} AS dim_{i}" for i, col in enumerate(dims)) + ", ") if dims else ""
+
+    sql = f"""
+        SELECT {dim_select}Year, COUNT(DISTINCT PURE_ID) AS n
+        FROM pubs
+        WHERE Intern       = 'Intern'
+          AND Fak          IN ({ph(filters['fakultet'])})
+          AND Inst         IN ({ph(filters['institutter'])})
+          AND Stil         IN ({ph(filters['stillingsgrupper'])})
+          AND Type        IN ({ph(filters['typer'])})
+          AND Sprog       IN ({ph(filters['sprog'])})
+          AND Peer_review IN ({ph(filters['peer'])})
+          AND Indholdstype IN ({ph(filters['indholdstyper'])})
+          AND ({doi_filter_sql(filters['har_doi'])})
+          AND COALESCE(Open_Access, 'Unknown') IN ({ph(filters['open_access'])})
+          AND Year IS NOT NULL
+          AND ({ac_sql})
+        GROUP BY {", ".join(str(i) for i in range(1, n_dims + 2)) if dims else "1"}
+        ORDER BY {n_dims + 1 if dims else 1}
+    """
+    params = (
+        filters['fakultet'] + filters['institutter'] + filters['stillingsgrupper'] +
+        filters['typer'] + filters['sprog'] + filters['peer'] +
+        filters['indholdstyper'] + filters['open_access'] + ac_params
+    )
+    rows = get_cursor().execute(sql, params).fetchall()
+
+    by_year_unit = {}
+    for row in rows:
+        dim_values = row[:n_dims]
+        year = row[n_dims]
+        n = row[n_dims + 1]
+        unit_label = " | ".join(str(v) for v in reversed(dim_values)) if dim_values else "KU samlet"
+        by_year_unit.setdefault(year, {})[unit_label] = n
+
+    if filters.get("mode", "F") == "F" and show_ku_samlet(filters):
+        merged = {year: {"KU samlet": sum(cats.values())} for year, cats in by_year_unit.items()}
+        return merged
+
+    return by_year_unit
 
 def _detect_fresh_click(widget_key: str) -> int | None:
     """
@@ -618,13 +871,22 @@ uden citationer kan klassificeres. ([Analyse af klassifikationsmodellen](https:/
                 filters, "Domain", "COALESCE(Domain, 'Ukendt')", "Domæne",
                 chart_mode="antal", clickable=True, key_suffix="domain_antal", level_key="domain",
             )
+            _clicked_domain_n = st.session_state.get("_resolved_domain")
+            if _clicked_domain_n:
+                _trend = _query_category_year_trend(filters, "COALESCE(Domain, 'Ukendt')", _clicked_domain_n)
+                _render_category_trend(_trend, _clicked_domain_n, key_suffix="domain_trend_antal", chart_mode="antal")
         with _tab_dom_p:
             _render_topic_section(
                 filters, "Domain", "COALESCE(Domain, 'Ukendt')", "Domæne",
                 chart_mode="pct", clickable=True, key_suffix="domain_pct", level_key="domain",
             )
+            _clicked_domain_p = st.session_state.get("_resolved_domain")
+            if _clicked_domain_p:
+                _trend = _query_category_year_trend(filters, "COALESCE(Domain, 'Ukendt')", _clicked_domain_p)
+                _trend_totals = _query_org_year_totals(filters)
+                _render_category_trend(_trend, _clicked_domain_p, key_suffix="domain_trend_pct", chart_mode="pct", year_totals=_trend_totals)
         _clicked_domain = st.session_state.get("_resolved_domain")
-    
+
         if not _clicked_domain:
             st.caption("Klik på et domæne i figuren ovenfor for at se dets felter.")
         else:
@@ -639,12 +901,21 @@ uden citationer kan klassificeres. ([Analyse af klassifikationsmodellen](https:/
                     chart_mode="antal", clickable=True, key_suffix="field_antal", level_key="field",
                     extra_filter_sql=_field_extra_sql, extra_filter_params=_field_extra_params,
                 )
+                _clicked_field_n = st.session_state.get("_resolved_field")
+                if _clicked_field_n:
+                    _trend = _query_category_year_trend(filters, "COALESCE(Field, 'Ukendt')", _clicked_field_n, extra_filter_sql=_field_extra_sql, extra_filter_params=_field_extra_params)
+                    _render_category_trend(_trend, _clicked_field_n, key_suffix="field_trend_antal", chart_mode="antal")
             with _tab_field_p:
                 _render_topic_section(
                     filters, "Field", "COALESCE(Field, 'Ukendt')", f"Felt under {_clicked_domain}",
                     chart_mode="pct", clickable=True, key_suffix="field_pct", level_key="field",
                     extra_filter_sql=_field_extra_sql, extra_filter_params=_field_extra_params,
                 )
+                _clicked_field_p = st.session_state.get("_resolved_field")
+                if _clicked_field_p:
+                    _trend = _query_category_year_trend(filters, "COALESCE(Field, 'Ukendt')", _clicked_field_p, extra_filter_sql=_field_extra_sql, extra_filter_params=_field_extra_params)
+                    _trend_totals = _query_org_year_totals(filters)
+                    _render_category_trend(_trend, _clicked_field_p, key_suffix="field_trend_pct", chart_mode="pct", year_totals=_trend_totals)
             _clicked_field = st.session_state.get("_resolved_field")
 
             if not _clicked_field:
@@ -667,12 +938,21 @@ uden citationer kan klassificeres. ([Analyse af klassifikationsmodellen](https:/
                         chart_mode="antal", top_x=_topx_subfield, clickable=True, key_suffix="subfield_antal", level_key="subfield",
                         extra_filter_sql=_subfield_extra_sql, extra_filter_params=_subfield_extra_params,
                     )
+                    _clicked_subfield_n = st.session_state.get("_resolved_subfield")
+                    if _clicked_subfield_n:
+                        _trend = _query_category_year_trend(filters, "COALESCE(Subfield, 'Ukendt')", _clicked_subfield_n, extra_filter_sql=_subfield_extra_sql, extra_filter_params=_subfield_extra_params)
+                        _render_category_trend(_trend, _clicked_subfield_n, key_suffix="subfield_trend_antal", chart_mode="antal")
                 with _tab_sub_p:
                     _render_topic_section(
                         filters, "Subfield", "COALESCE(Subfield, 'Ukendt')", f"Underfelt under {_clicked_field}",
                         chart_mode="pct", top_x=_topx_subfield, clickable=True, key_suffix="subfield_pct", level_key="subfield",
                         extra_filter_sql=_subfield_extra_sql, extra_filter_params=_subfield_extra_params,
                     )
+                    _clicked_subfield_p = st.session_state.get("_resolved_subfield")
+                    if _clicked_subfield_p:
+                        _trend = _query_category_year_trend(filters, "COALESCE(Subfield, 'Ukendt')", _clicked_subfield_p, extra_filter_sql=_subfield_extra_sql, extra_filter_params=_subfield_extra_params)
+                        _trend_totals = _query_org_year_totals(filters)
+                        _render_category_trend(_trend, _clicked_subfield_p, key_suffix="subfield_trend_pct", chart_mode="pct", year_totals=_trend_totals)
                 _clicked_subfield = st.session_state.get("_resolved_subfield")
 
                 if not _clicked_subfield:
@@ -692,15 +972,24 @@ uden citationer kan klassificeres. ([Analyse af klassifikationsmodellen](https:/
                     with _tab_topic_n:
                         _render_topic_section(
                             filters, "Topic", "COALESCE(Topic, 'Ukendt')", f"Emne under {_clicked_subfield}",
-                            chart_mode="antal", top_x=_topx_topic, key_suffix="topic_antal",
+                            chart_mode="antal", top_x=_topx_topic, clickable=True, key_suffix="topic_antal", level_key="topic",
                             extra_filter_sql=_topic_extra_sql, extra_filter_params=_topic_extra_params,
                         )
+                        _clicked_topic_n = st.session_state.get("_resolved_topic")
+                        if _clicked_topic_n:
+                            _trend = _query_category_year_trend(filters, "COALESCE(Topic, 'Ukendt')", _clicked_topic_n, extra_filter_sql=_topic_extra_sql, extra_filter_params=_topic_extra_params)
+                            _render_category_trend(_trend, _clicked_topic_n, key_suffix="topic_trend_antal", chart_mode="antal")
                     with _tab_topic_p:
                         _render_topic_section(
                             filters, "Topic", "COALESCE(Topic, 'Ukendt')", f"Emne under {_clicked_subfield}",
-                            chart_mode="pct", top_x=_topx_topic, key_suffix="topic_pct",
+                            chart_mode="pct", top_x=_topx_topic, clickable=True, key_suffix="topic_pct", level_key="topic",
                             extra_filter_sql=_topic_extra_sql, extra_filter_params=_topic_extra_params,
                         )
+                        _clicked_topic_p = st.session_state.get("_resolved_topic")
+                        if _clicked_topic_p:
+                            _trend = _query_category_year_trend(filters, "COALESCE(Topic, 'Ukendt')", _clicked_topic_p, extra_filter_sql=_topic_extra_sql, extra_filter_params=_topic_extra_params)
+                            _trend_totals = _query_org_year_totals(filters)
+                            _render_category_trend(_trend, _clicked_topic_p, key_suffix="topic_trend_pct", chart_mode="pct", year_totals=_trend_totals)
 
 
     if data_source == "SciVal":
@@ -787,12 +1076,21 @@ har valgt i sidepanelet.
                     chart_mode="antal", top_x=_topx_tc, clickable=True, key_suffix="tc_antal", level_key="topic_cluster",
                     use_domain_colors=False,
                 )
+                _clicked_tc_n = st.session_state.get("_resolved_topic_cluster")
+                if _clicked_tc_n:
+                    _trend = _query_category_year_trend(filters, "COALESCE(Topic_cluster, 'Ukendt')", _clicked_tc_n)
+                    _render_category_trend(_trend, _clicked_tc_n, key_suffix="tc_trend_antal", chart_mode="antal")
             with _tab_tc_p:
                 _render_topic_section(
                     filters, "Topic_cluster", "COALESCE(Topic_cluster, 'Ukendt')", "Topic Cluster",
                     chart_mode="pct", top_x=_topx_tc, clickable=True, key_suffix="tc_pct", level_key="topic_cluster",
                     use_domain_colors=False,
                 )
+                _clicked_tc_p = st.session_state.get("_resolved_topic_cluster")
+                if _clicked_tc_p:
+                    _trend = _query_category_year_trend(filters, "COALESCE(Topic_cluster, 'Ukendt')", _clicked_tc_p)
+                    _trend_totals = _query_org_year_totals(filters)
+                    _render_category_trend(_trend, _clicked_tc_p, key_suffix="tc_trend_pct", chart_mode="pct", year_totals=_trend_totals)
             _clicked_tc = st.session_state.get("_resolved_topic_cluster")
 
             if not _clicked_tc:
@@ -814,17 +1112,26 @@ har valgt i sidepanelet.
                 with _tab_svt_n:
                     _render_topic_section(
                         filters, "Topic", "COALESCE(Topic, 'Ukendt')", f"Topic under {_clicked_tc}",
-                        chart_mode="antal", top_x=_topx_sv_topic, key_suffix="sv_topic_antal",
+                        chart_mode="antal", top_x=_topx_sv_topic, clickable=True, key_suffix="sv_topic_antal", level_key="sv_topic",
                         extra_filter_sql=_sv_topic_extra_sql, extra_filter_params=_sv_topic_extra_params,
                         base_color=_tc_color,
                     )
+                    _clicked_sv_topic_n = st.session_state.get("_resolved_sv_topic")
+                    if _clicked_sv_topic_n:
+                        _trend = _query_category_year_trend(filters, "COALESCE(Topic, 'Ukendt')", _clicked_sv_topic_n, extra_filter_sql=_sv_topic_extra_sql, extra_filter_params=_sv_topic_extra_params)
+                        _render_category_trend(_trend, _clicked_sv_topic_n, key_suffix="sv_topic_trend_antal", chart_mode="antal")
                 with _tab_svt_p:
                     _render_topic_section(
                         filters, "Topic", "COALESCE(Topic, 'Ukendt')", f"Topic under {_clicked_tc}",
-                        chart_mode="pct", top_x=_topx_sv_topic, key_suffix="sv_topic_pct",
+                        chart_mode="pct", top_x=_topx_sv_topic, clickable=True, key_suffix="sv_topic_pct", level_key="sv_topic",
                         extra_filter_sql=_sv_topic_extra_sql, extra_filter_params=_sv_topic_extra_params,
                         base_color=_tc_color,
                     )
+                    _clicked_sv_topic_p = st.session_state.get("_resolved_sv_topic")
+                    if _clicked_sv_topic_p:
+                        _trend = _query_category_year_trend(filters, "COALESCE(Topic, 'Ukendt')", _clicked_sv_topic_p, extra_filter_sql=_sv_topic_extra_sql, extra_filter_params=_sv_topic_extra_params)
+                        _trend_totals = _query_org_year_totals(filters)
+                        _render_category_trend(_trend, _clicked_sv_topic_p, key_suffix="sv_topic_trend_pct", chart_mode="pct", year_totals=_trend_totals)
 
         else:
             st.markdown(
@@ -840,6 +1147,10 @@ andelene på hvert niveau summerer derfor ikke nødvendigvis til 100%.
                 clickable=True, key_suffix="domain", level_key="asjc_domain",
             )
             _clicked_asjc_domain = st.session_state.get("_resolved_asjc_domain")
+            if _clicked_asjc_domain:
+                _trend = _query_asjc_category_year_trend(filters, "domain", _clicked_asjc_domain)
+                _trend_totals = _query_org_year_totals(filters)
+                _render_category_trend(_trend, _clicked_asjc_domain, key_suffix="asjc_domain_trend", chart_mode="pct", year_totals=_trend_totals)
 
             if not _clicked_asjc_domain:
                 st.caption("Klik på et fagområde i figuren ovenfor for at se dets hovedfelter.")
@@ -856,6 +1167,10 @@ andelene på hvert niveau summerer derfor ikke nødvendigvis til 100%.
                     restrict_domain=_clicked_asjc_domain,
                 )
                 _clicked_asjc_field = st.session_state.get("_resolved_asjc_field")
+                if _clicked_asjc_field:
+                    _trend = _query_asjc_category_year_trend(filters, "field", _clicked_asjc_field, restrict_domain=_clicked_asjc_domain)
+                    _trend_totals = _query_org_year_totals(filters)
+                    _render_category_trend(_trend, _clicked_asjc_field, key_suffix="asjc_field_trend", chart_mode="pct", year_totals=_trend_totals)
 
                 if not _clicked_asjc_field:
                     st.caption("Klik på et hovedfelt i figuren ovenfor for at se dets kategorier.")
@@ -871,7 +1186,12 @@ andelene på hvert niveau summerer derfor ikke nødvendigvis til 100%.
                     )
                     _render_asjc_section(
                         filters, "category", f"Kategori under {_clicked_asjc_field}", top_x=_topx_asjc_cat,
-                        key_suffix="category", restrict_field_abbr=_clicked_field_abbr,
+                        clickable=True, key_suffix="category", level_key="asjc_category", restrict_field_abbr=_clicked_field_abbr,
                     )
+                    _clicked_asjc_category = st.session_state.get("_resolved_asjc_category")
+                    if _clicked_asjc_category:
+                        _trend = _query_asjc_category_year_trend(filters, "category", _clicked_asjc_category, restrict_field_abbr=_clicked_field_abbr)
+                        _trend_totals = _query_org_year_totals(filters)
+                        _render_category_trend(_trend, _clicked_asjc_category, key_suffix="asjc_category_trend", chart_mode="pct", year_totals=_trend_totals)
 
 
