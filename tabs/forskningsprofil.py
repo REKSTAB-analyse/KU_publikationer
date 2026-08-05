@@ -7,13 +7,42 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
  
 import streamlit as st
 from data.loader import get_cursor
-from components.charts import fig_hbar_stacked, PLOTLY_CONFIG, domain_shaded_colors, _DOMAIN_COLORS
+from components.charts import fig_hbar_stacked, PLOTLY_CONFIG, domain_shaded_colors, _DOMAIN_COLORS, _hls_gradient
 from components.export import render_table_export
 from components.colors import ku_color_sequence
 from config import hier_cols, breakdown_label, doi_filter_sql, year_range_label, author_count_filter, show_ku_samlet
 
+_ASJC_FIELD_TO_DOMAIN = {
+    "AGRI": "Life Sciences", "ARTS": "Social Sciences", "BIOC": "Life Sciences",
+    "BUSI": "Social Sciences", "CENG": "Physical Sciences", "CHEM": "Physical Sciences",
+    "COMP": "Physical Sciences", "DECI": "Social Sciences", "DENT": "Health Sciences",
+    "EART": "Physical Sciences", "ECON": "Social Sciences", "ENER": "Physical Sciences",
+    "ENGI": "Physical Sciences", "ENVI": "Physical Sciences", "HEAL": "Health Sciences",
+    "IMMU": "Life Sciences", "MATE": "Physical Sciences", "MATH": "Physical Sciences",
+    "MEDI": "Health Sciences", "NEUR": "Life Sciences", "NURS": "Health Sciences",
+    "PHAR": "Life Sciences", "PHYS": "Physical Sciences", "PSYC": "Social Sciences",
+    "SOCI": "Social Sciences", "VETE": "Health Sciences", "MULT": "Multidisciplinary",
+}
+
+_ASJC_FIELD_NAMES = {
+    "AGRI": "Agricultural and Biological Sciences", "ARTS": "Arts and Humanities",
+    "BIOC": "Biochemistry, Genetics and Molecular Biology", "BUSI": "Business, Management and Accounting",
+    "CENG": "Chemical Engineering", "CHEM": "Chemistry", "COMP": "Computer Science",
+    "DECI": "Decision Sciences", "DENT": "Dentistry", "EART": "Earth and Planetary Sciences",
+    "ECON": "Economics, Econometrics and Finance", "ENER": "Energy", "ENGI": "Engineering",
+    "ENVI": "Environmental Science", "HEAL": "Health Professions", "IMMU": "Immunology and Microbiology",
+    "MATE": "Materials Science", "MATH": "Mathematics", "MEDI": "Medicine", "NEUR": "Neuroscience",
+    "NURS": "Nursing", "PHAR": "Pharmacology, Toxicology and Pharmaceutics", "PHYS": "Physics and Astronomy",
+    "PSYC": "Psychology", "SOCI": "Social Sciences", "VETE": "Veterinary", "MULT": "Multidisciplinary",
+}
+
+_ASJC_FIELD_NAME_TO_DOMAIN = {name: _ASJC_FIELD_TO_DOMAIN[abbr] for abbr, name in _ASJC_FIELD_NAMES.items()}
 
 ANDET_LABEL = "Andet"
+
+def _case_expr(col_expr: str, mapping: dict, default: str = "'Ukendt'") -> str:
+    whens = " ".join(f"WHEN '{k}' THEN '{v}'" for k, v in mapping.items())
+    return f"CASE {col_expr} {whens} ELSE {default} END"
 
 def _slugify(text: str) -> str:
     return re.sub(r"[^a-z0-9]+", "_", text.lower()).strip("_")
@@ -147,6 +176,127 @@ def _query_dim_domain_map(filters, dim_col, extra_filter_sql="1=1", extra_filter
     rows = get_cursor().execute(sql, params).fetchall()
     return {cat: dom for cat, dom in rows}
 
+@st.cache_data
+def _query_asjc_section(filters, level, restrict_domain=None, restrict_field_abbr=None):
+    """
+    ASJC er flerværdi pr. publikation - felter, koder og navne er alle
+    PIPE-SEPAREREDE i SAMME rækkefølge (positionelt parrede). For at undgå
+    at et felt/en kategori fra et HELT ANDET fagområde/felt "lækker" ind,
+    når man er zoomet ind på ét bestemt niveau, EKSPLODERES asjc_felter og
+    asjc_navne SAMMEN (positionelt, via to UNNEST i samme SELECT-liste -
+    IKKE i FROM-delen, som ikke parrer korrekt i DuckDB), og selve
+    restriktionen (restrict_domain/restrict_field_abbr) filtrerer på det
+    EKSPLODEREDE par, ikke kun på om publikationen overhovedet matcher et
+    sted i sin fulde liste.
+    level: 'domain' | 'field' | 'category'
+    """
+    ph = lambda lst: ", ".join(["?" for _ in lst])
+    dims = hier_cols(filters.get("mode", "F"))
+    n_dims = len(dims)
+    ac_sql, ac_params = author_count_filter(filters['min_forfattere'], filters['max_forfattere'])
+
+    dim_select = (", ".join(f"{col} AS dim_{i}" for i, col in enumerate(dims)) + ", ") if dims else ""
+
+    base_where = f"""
+        WHERE Intern       = 'Intern'
+          AND Fak          IN ({ph(filters['fakultet'])})
+          AND Inst         IN ({ph(filters['institutter'])})
+          AND Stil         IN ({ph(filters['stillingsgrupper'])})
+          AND Type        IN ({ph(filters['typer'])})
+          AND Sprog       IN ({ph(filters['sprog'])})
+          AND Peer_review IN ({ph(filters['peer'])})
+          AND Indholdstype IN ({ph(filters['indholdstyper'])})
+          AND ({doi_filter_sql(filters['har_doi'])})
+          AND COALESCE(Open_Access, 'Unknown') IN ({ph(filters['open_access'])})
+          AND Year        BETWEEN ? AND ?
+          AND ({ac_sql})
+          AND ASJC_felter IS NOT NULL AND ASJC_felter != ''
+    """
+    base_params = (
+        filters['fakultet'] + filters['institutter'] + filters['stillingsgrupper'] +
+        filters['typer'] + filters['sprog'] + filters['peer'] +
+        filters['indholdstyper'] + filters['open_access'] +
+        [filters['aar_fra'], filters['aar_til']] + ac_params
+    )
+
+    domain_case = _case_expr("felt_abbr", _ASJC_FIELD_TO_DOMAIN)
+    field_case = _case_expr("felt_abbr", _ASJC_FIELD_NAMES)
+
+    # --- Positionel eksplodering: felt og kategori-navn SAMMEN, i SELECT-listen ---
+    exploded_sql = f"""
+        SELECT {dim_select}PURE_ID,
+               TRIM(UNNEST(STRING_SPLIT(ASJC_felter, '|'))) AS felt_abbr,
+               TRIM(UNNEST(STRING_SPLIT(ASJC_navne, '|'))) AS kat_navn
+        FROM pubs
+        {base_where}
+    """
+
+    restrict_sql = ""
+    restrict_params = []
+    if restrict_domain:
+        restrict_sql = f"AND {domain_case} = ?"
+        restrict_params = [restrict_domain]
+    elif restrict_field_abbr:
+        restrict_sql = "AND felt_abbr = ?"
+        restrict_params = [restrict_field_abbr]
+
+    if level == "domain":
+        value_expr = domain_case
+    elif level == "field":
+        value_expr = field_case
+    else:  # category
+        value_expr = "kat_navn"
+
+    dim_names = ", ".join(f"dim_{i}" for i in range(n_dims))
+    dim_select_outer = (dim_names + ", ") if dims else ""
+    group_by = ", ".join(str(i) for i in range(1, n_dims + 2)) if dims else "1"
+    order_by_sql = ", ".join(str(i) for i in range(1, n_dims + 1)) if dims else "1"
+
+    sql = f"""
+        WITH exploded AS ({exploded_sql})
+        SELECT {dim_select_outer}{value_expr} AS asjc_value, COUNT(DISTINCT PURE_ID) AS n
+        FROM exploded
+        WHERE 1=1 {restrict_sql}
+        GROUP BY {group_by}
+        ORDER BY {order_by_sql}
+    """
+    rows = get_cursor().execute(sql, base_params + restrict_params).fetchall()
+
+    result, cluster_map = {}, {}
+    for row in rows:
+        dim_values = row[:n_dims]
+        cat = row[n_dims]
+        n = row[n_dims + 1]
+        dim_label = " | ".join(str(v) for v in reversed(dim_values)) if dim_values else "KU samlet"
+        clusters = tuple(dim_values[:-1]) if n_dims > 1 else None
+        if dim_label not in result:
+            result[dim_label] = {}
+            cluster_map[dim_label] = clusters
+        result[dim_label][cat] = result[dim_label].get(cat, 0) + n
+
+    if filters.get("mode", "F") == "F" and show_ku_samlet(filters):
+        ku_sql = f"""
+            WITH exploded AS ({exploded_sql})
+            SELECT {value_expr} AS asjc_value, COUNT(DISTINCT PURE_ID) AS n
+            FROM exploded
+            WHERE 1=1 {restrict_sql}
+            GROUP BY 1
+        """
+        ku_rows = get_cursor().execute(ku_sql, base_params + restrict_params).fetchall()
+        result = {"KU samlet": dict(ku_rows), **result}
+
+    return result, cluster_map
+
+def _asjc_pct_denominators(filters):
+    """Antal ALLE distinkte publikationer pr. enhed, uafhængigt af ASJC-status
+    - bruges som nævner til 'Andel (%)' på alle tre niveauer (domæne, felt,
+    kategori), så et tal direkte kan læses som 'X% af enhedens publikationer
+    i alt'. Bemærk: publikationer uden nogen ASJC-klassifikation tæller
+    stadig med i nævneren, men kan aldrig optræde i nogen tæller - lav
+    ASJC-dækning trækker derfor alle procenttal nedad."""
+    data, _ = _query_topic_section(filters, "'Alle'")
+    return {unit: sum(cats.values()) for unit, cats in data.items()}
+
 def _detect_fresh_click(widget_key: str) -> int | None:
     """
     Returnerer curve_number, HVIS widgettens gemte valg er nyt siden sidste
@@ -170,11 +320,17 @@ _LEVEL_CHILDREN = {
     "domain": ["field"],
     "field": ["subfield"],
     "subfield": ["topic"],
+    "topic_cluster": ["sv_topic"],
+    "asjc_domain": ["asjc_field"],
+    "asjc_field": ["asjc_category"],
 }
 _LEVEL_WIDGET_SUFFIXES = {
     "field": ["field_antal", "field_pct"],
     "subfield": ["subfield_antal", "subfield_pct"],
     "topic": ["topic_antal", "topic_pct"],
+    "sv_topic": ["sv_topic_antal", "sv_topic_pct"],
+    "asjc_field": ["asjc_field"],
+    "asjc_category": ["asjc_category"],
 }
 
 def _clear_descendants(level_key: str) -> None:
@@ -194,7 +350,8 @@ def _clear_descendants(level_key: str) -> None:
         _clear_descendants(child)
 
 def _render_topic_section(filters, dim_col, category_sql, title_prefix, chart_mode="antal", top_x=None,
-                           clickable=False, key_suffix="", level_key="", extra_filter_sql="1=1", extra_filter_params=()):
+                           clickable=False, key_suffix="", level_key="", extra_filter_sql="1=1", extra_filter_params=(),
+                           use_domain_colors=True, base_color=None):
     data, cluster_map = _query_topic_section(filters, category_sql, extra_filter_sql, extra_filter_params)
     if not any(data.values()):
         st.error("Ingen publikationer matcher de valgte filtre.")
@@ -207,6 +364,8 @@ def _render_topic_section(filters, dim_col, category_sql, title_prefix, chart_mo
     ordered_units = [u for u in org_data if u in data] + [u for u in data if u not in org_data]
     data = {u: data[u] for u in ordered_units}
     cluster_map = {u: cluster_map[u] for u in ordered_units}
+
+    pct_denominators = {unit: sum(cats.values()) for unit, cats in org_data.items()}
 
     full_data = data  # ureduceret - bruges til eksport, uanset Top-X
 
@@ -222,7 +381,22 @@ def _render_topic_section(filters, dim_col, category_sql, title_prefix, chart_mo
         order = sorted(totals, key=lambda k: -totals[k])
     
     # --- Farver ---
-    if dim_col == "Domain":
+    if base_color:
+        # Bruges til fx SciVal Topics under en Topic Cluster: knækkede
+        # nuancer af MODERENS egen (allerede tildelte) farve, i stedet for
+        # en fast domænefarve, som SciVal ikke selv har.
+        real_keys = [k for k in order if k != ANDET_LABEL]
+        shades = _hls_gradient(base_color, len(real_keys))
+        colors = {k: shades[i] for i, k in enumerate(real_keys)}
+        if ANDET_LABEL in order:
+            colors[ANDET_LABEL] = "#cccccc"
+    elif not use_domain_colors:
+        real_keys = [k for k in order if k != ANDET_LABEL]
+        palette = ku_color_sequence(len(real_keys))
+        colors = {k: palette[i] for i, k in enumerate(real_keys)}
+        if ANDET_LABEL in order:
+            colors[ANDET_LABEL] = "#cccccc"
+    elif dim_col == "Domain":
         colors = {k: _DOMAIN_COLORS.get(k, "#666666") for k in order}
     else:
         dim_domain_map = _query_dim_domain_map(filters, dim_col, extra_filter_sql, extra_filter_params)
@@ -230,7 +404,9 @@ def _render_topic_section(filters, dim_col, category_sql, title_prefix, chart_mo
         colors = domain_shaded_colors(real_keys, dim_domain_map, totals)
         if ANDET_LABEL in order:
             colors[ANDET_LABEL] = "#cccccc"
-    
+
+    st.session_state[f"_colors_{key_suffix}"] = colors  # gemmes så et barneniveaus base_color kan slå moderens farve op
+
     y_labels = list(data.keys())
     group_keys = None
     if any(v is not None for v in cluster_map.values()):
@@ -242,6 +418,7 @@ def _render_topic_section(filters, dim_col, category_sql, title_prefix, chart_mo
         title=f"{title_prefix}, {breakdown_label(mode)}, {year_range_label(filters['aar_fra'], filters['aar_til'])}",
         xaxis_title="Antal publikationer", mode=chart_mode,
         group_keys=group_keys, legend_position="right",
+        pct_denominators=pct_denominators,
     )
 
     prev_state = st.session_state.get(f"topic_chart_{key_suffix}") if clickable else None
@@ -264,6 +441,88 @@ def _render_topic_section(filters, dim_col, category_sql, title_prefix, chart_mo
         filename=f"{_slugify(title_prefix)}_{chart_mode}.xlsx",
         sheet_name=title_prefix[:31],
         key=f"export_forskningsprofil_{_slugify(title_prefix)}_{chart_mode}_{key_suffix}",
+    )
+
+    if not clickable:
+        return None
+
+    fresh_curve = _detect_fresh_click(widget_key)
+    if fresh_curve is not None and fresh_curve < len(fig.data):
+        clicked_name = fig.data[fresh_curve].name
+        if level_key and st.session_state.get(f"_resolved_{level_key}") != clicked_name:
+            st.session_state[f"_resolved_{level_key}"] = clicked_name
+            _clear_descendants(level_key)
+            st.rerun()
+        return clicked_name
+
+    if level_key:
+        return st.session_state.get(f"_resolved_{level_key}")
+    return None
+
+def _render_asjc_section(filters, level, title_prefix, top_x=None, clickable=False, key_suffix="",
+                          level_key="", restrict_domain=None, restrict_field_abbr=None):
+    data, cluster_map = _query_asjc_section(filters, level, restrict_domain=restrict_domain, restrict_field_abbr=restrict_field_abbr)
+    if not any(data.values()):
+        st.error("Ingen publikationer matcher de valgte filtre.")
+        return None
+
+    pct_denominators = _asjc_pct_denominators(filters)
+
+    full_data = data
+    totals = {}
+    for cats in data.values():
+        for k, n in cats.items():
+            totals[k] = totals.get(k, 0) + n
+
+    order = None
+    if top_x:
+        data, order, _ = _apply_top_x(data, top_x, always_keep=["Ukendt"])
+    if order is None:
+        order = sorted(totals, key=lambda k: -totals[k])
+
+    real_keys = [k for k in order if k != ANDET_LABEL]
+    if level == "domain":
+        colors = {k: _DOMAIN_COLORS.get(k, "#666666") for k in order}
+    elif level == "field":
+        dim_domain_map = {k: _ASJC_FIELD_NAME_TO_DOMAIN.get(k, "Ukendt") for k in real_keys}
+        colors = domain_shaded_colors(real_keys, dim_domain_map, totals)
+    else:  # category - alt under det klikkede felt hører til SAMME domæne
+        dom = restrict_field_abbr and _ASJC_FIELD_TO_DOMAIN.get(restrict_field_abbr, "Ukendt") or "Ukendt"
+        dim_domain_map = {k: dom for k in real_keys}
+        colors = domain_shaded_colors(real_keys, dim_domain_map, totals)
+    if ANDET_LABEL in order:
+        colors[ANDET_LABEL] = "#cccccc"
+
+    y_labels = list(data.keys())
+    group_keys = None
+    if any(v is not None for v in cluster_map.values()):
+        group_keys = ["__ku__" if lbl == "KU samlet" else cluster_map.get(lbl, "__single__") for lbl in y_labels]
+
+    mode = filters.get("mode", "F")
+    fig = fig_hbar_stacked(
+        data=data, order=order, colors=colors,
+        title=f"{title_prefix}, {breakdown_label(mode)}, {year_range_label(filters['aar_fra'], filters['aar_til'])}",
+        xaxis_title="Andel (%)", mode="pct",
+        group_keys=group_keys, legend_position="right",
+        pct_denominators=pct_denominators,
+    )
+
+    if clickable:
+        widget_key = f"asjc_chart_{key_suffix}"
+        if level_key:
+            resolved = st.session_state.get(f"_resolved_{level_key}")
+            if resolved:
+                for trace in fig.data:
+                    trace.marker.opacity = 1.0 if trace.name == resolved else 0.25
+        st.plotly_chart(fig, width="stretch", config=PLOTLY_CONFIG, on_select="rerun", key=widget_key)
+    else:
+        st.plotly_chart(fig, width="stretch", config=PLOTLY_CONFIG)
+
+    render_table_export(
+        data=full_data, row_label="Enhed",
+        filename=f"{_slugify(title_prefix)}_asjc.xlsx",
+        sheet_name=title_prefix[:31],
+        key=f"export_asjc_{_slugify(title_prefix)}_{key_suffix}",
     )
 
     if not clickable:
@@ -444,7 +703,6 @@ uden citationer kan klassificeres. ([Analyse af klassifikationsmodellen](https:/
                         )
 
 
-
     if data_source == "SciVal":
         with st.expander("Sådan klassificerer SciVal emneområder"):
             st.markdown(
@@ -501,5 +759,119 @@ fagområder.
 """
             )
 
+        _sv_visning = st.radio(
+            "Vis emnefordeling efter:",
+            options=["Topics og Topic Clusters", "ASJC-klassifikation"],
+            index=0, horizontal=True, key="scival_emnevisning",
+        )
+
+        if _sv_visning == "Topics og Topic Clusters":
+            st.markdown(
+"""
+Topic Cluster-figuren nedenfor viser den bredeste inddeling: klik på en søjle for at 
+zoome ind på dens Topics. Hver niveau brydes ned på de organisatoriske niveauer, du 
+har valgt i sidepanelet.  
+"""
+            )
+
+            _max_tc = _count_categories(filters, "COALESCE(Topic_cluster, 'Ukendt')")
+            _topx_tc = st.number_input(
+                "Vis top-X Topic Clusters (resten samles i 'Andet')",
+                min_value=1, max_value=_max_tc, value=min(10, _max_tc), step=1, key="topx_topic_cluster",
+            )
+
+            _tab_tc_n, _tab_tc_p = st.tabs(["Antal", "Andel (%)"])
+            with _tab_tc_n:
+                _render_topic_section(
+                    filters, "Topic_cluster", "COALESCE(Topic_cluster, 'Ukendt')", "Topic Cluster",
+                    chart_mode="antal", top_x=_topx_tc, clickable=True, key_suffix="tc_antal", level_key="topic_cluster",
+                    use_domain_colors=False,
+                )
+            with _tab_tc_p:
+                _render_topic_section(
+                    filters, "Topic_cluster", "COALESCE(Topic_cluster, 'Ukendt')", "Topic Cluster",
+                    chart_mode="pct", top_x=_topx_tc, clickable=True, key_suffix="tc_pct", level_key="topic_cluster",
+                    use_domain_colors=False,
+                )
+            _clicked_tc = st.session_state.get("_resolved_topic_cluster")
+
+            if not _clicked_tc:
+                st.caption("Klik på en Topic Cluster i figuren ovenfor for at zoome ind på dens Topics.")
+            else:
+                st.markdown(f"---\n##### Topics under *{_clicked_tc}*")
+                _tc_color = st.session_state.get("_colors_tc_antal", {}).get(_clicked_tc, "#666666")
+
+                _sv_topic_extra_sql = "Topic_cluster = ?"
+                _sv_topic_extra_params = (_clicked_tc,)
+
+                _max_sv_topic = _count_categories(filters, "COALESCE(Topic, 'Ukendt')", _sv_topic_extra_sql, _sv_topic_extra_params)
+                _topx_sv_topic = st.number_input(
+                    "Vis top-X Topics (resten samles i 'Andet')",
+                    min_value=1, max_value=_max_sv_topic, value=min(10, _max_sv_topic), step=1, key="topx_scival_topic",
+                )
+
+                _tab_svt_n, _tab_svt_p = st.tabs(["Antal", "Andel (%)"])
+                with _tab_svt_n:
+                    _render_topic_section(
+                        filters, "Topic", "COALESCE(Topic, 'Ukendt')", f"Topic under {_clicked_tc}",
+                        chart_mode="antal", top_x=_topx_sv_topic, key_suffix="sv_topic_antal",
+                        extra_filter_sql=_sv_topic_extra_sql, extra_filter_params=_sv_topic_extra_params,
+                        base_color=_tc_color,
+                    )
+                with _tab_svt_p:
+                    _render_topic_section(
+                        filters, "Topic", "COALESCE(Topic, 'Ukendt')", f"Topic under {_clicked_tc}",
+                        chart_mode="pct", top_x=_topx_sv_topic, key_suffix="sv_topic_pct",
+                        extra_filter_sql=_sv_topic_extra_sql, extra_filter_params=_sv_topic_extra_params,
+                        base_color=_tc_color,
+                    )
+
+        else:
+            st.markdown(
+"""
+Figuren nedenfor viser andelen af publikationer klassificeret under hvert fagområde - klik på en søjle
+for at zoome ind på dens hovedfelter, og videre ned til specifikke kategorier. En publikation kan tælle
+med under **flere** fagområder/felter/kategorier samtidig, hvis dens tidsskrift dækker mere end ét område -
+andelene på hvert niveau summerer derfor ikke nødvendigvis til 100%.
+"""
+            )
+            _render_asjc_section(
+                filters, "domain", "Fagområde",
+                clickable=True, key_suffix="domain", level_key="asjc_domain",
+            )
+            _clicked_asjc_domain = st.session_state.get("_resolved_asjc_domain")
+
+            if not _clicked_asjc_domain:
+                st.caption("Klik på et fagområde i figuren ovenfor for at se dets hovedfelter.")
+            else:
+                st.markdown(f"---\n##### Hovedfelter under *{_clicked_asjc_domain}*")
+
+                _topx_asjc_field = st.number_input(
+                    "Vis top-X hovedfelter (resten samles i 'Andet')",
+                    min_value=1, max_value=27, value=10, step=1, key="topx_asjc_field",
+                )
+                _render_asjc_section(
+                    filters, "field", f"Hovedfelt under {_clicked_asjc_domain}", top_x=_topx_asjc_field,
+                    clickable=True, key_suffix="field", level_key="asjc_field",
+                    restrict_domain=_clicked_asjc_domain,
+                )
+                _clicked_asjc_field = st.session_state.get("_resolved_asjc_field")
+
+                if not _clicked_asjc_field:
+                    st.caption("Klik på et hovedfelt i figuren ovenfor for at se dets kategorier.")
+                else:
+                    st.markdown(f"---\n##### Kategorier under *{_clicked_asjc_field}*")
+                    _clicked_field_abbr = next(
+                        (a for a, n in _ASJC_FIELD_NAMES.items() if n == _clicked_asjc_field), None
+                    )
+
+                    _topx_asjc_cat = st.number_input(
+                        "Vis top-X kategorier (resten samles i 'Andet')",
+                        min_value=1, max_value=50, value=10, step=1, key="topx_asjc_category",
+                    )
+                    _render_asjc_section(
+                        filters, "category", f"Kategori under {_clicked_asjc_field}", top_x=_topx_asjc_cat,
+                        key_suffix="category", restrict_field_abbr=_clicked_field_abbr,
+                    )
 
 
