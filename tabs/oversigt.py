@@ -9,6 +9,7 @@ import plotly.graph_objects as go
 from config import doi_filter_sql, author_count_filter, hier_cols, show_ku_samlet
 from components.colors import build_faculty_colors, ku_color_sequence
 from components.charts import fig_year_trend, PLOTLY_CONFIG, _hls_gradient
+from components.export import render_table_export
  
 def _base_where_and_params(filters, alias=""):
     ph = lambda lst: ", ".join(["?" for _ in lst])
@@ -268,7 +269,94 @@ def _render_org_trend(trend_data, title, key_suffix):
         margin=dict(t=50, b=70, l=10, r=10),
     )
     st.plotly_chart(fig, width="stretch", config=PLOTLY_CONFIG, key=f"trend_chart_{key_suffix}")
- 
+
+    render_table_export(
+        data={str(year): cats for year, cats in sorted(trend_data.items())},
+        row_label="År",
+        filename=f"{key_suffix}_over_tid.xlsx",
+        sheet_name="Udvikling over tid",
+        key=f"export_oversigt_{key_suffix}",
+    )
+
+def _render_ratio_trend(pub_trend, author_trend, title, key_suffix):
+    """Linjegraf: publikationer pr. forfatter, år for år, pr. organisatorisk
+    enhed - samme farvelogik (KU-rød/fakultetsfarver/knækkede institutfarver)
+    som _render_org_trend, men viser forholdet mellem to allerede hentede
+    trend-datasæt i stedet for ét råt antal."""
+    years_sorted = sorted(set(pub_trend.keys()) | set(author_trend.keys()))
+    units = sorted(
+        {u for cats in pub_trend.values() for u in cats} | {u for cats in author_trend.values() for u in cats},
+        key=lambda u: (u != "KU samlet", u)
+    )
+    if not units:
+        st.error("Ingen data matcher de valgte filtre.")
+        return
+
+    faculty_colors = build_faculty_colors()
+    totals = {}
+    for cats in pub_trend.values():
+        for u, n in cats.items():
+            totals[u] = totals.get(u, 0) + n
+
+    colors = {}
+    for u in units:
+        if u == "KU samlet":
+            colors[u] = "#901a1e"
+        elif u in faculty_colors:
+            colors[u] = faculty_colors[u]
+
+    inst_units = [u for u in units if u not in colors]
+    by_faculty = {}
+    for u in inst_units:
+        parts = u.split(" | ")
+        parent_fak = parts[-1] if len(parts) > 1 else None
+        by_faculty.setdefault(parent_fak, []).append(u)
+    for parent_fak, insts in by_faculty.items():
+        insts_sorted = sorted(insts, key=lambda u: -totals.get(u, 0))
+        base = faculty_colors.get(parent_fak)
+        if base:
+            shades = _hls_gradient(base, len(insts_sorted))
+            for i, u in enumerate(insts_sorted):
+                colors[u] = shades[i]
+        else:
+            fallback = ku_color_sequence(len(insts_sorted))
+            for i, u in enumerate(insts_sorted):
+                colors[u] = fallback[i]
+
+    ratio_data = {}
+    fig = go.Figure()
+    for unit in units:
+        y_vals = []
+        for year in years_sorted:
+            n_pub = pub_trend.get(year, {}).get(unit, 0)
+            n_auth = author_trend.get(year, {}).get(unit, 0)
+            ratio = round(n_pub / n_auth, 2) if n_auth else None
+            y_vals.append(ratio)
+            ratio_data.setdefault(year, {})[unit] = ratio
+        fig.add_trace(go.Scatter(
+            x=years_sorted, y=y_vals, mode="lines+markers", name=unit,
+            line=dict(color=colors.get(unit, "#666666"), width=3 if unit == "KU samlet" else 2),
+            marker=dict(size=6),
+            hovertemplate=f"<b>{unit}</b><br>%{{x}}<br>%{{y:.2f}} publikationer pr. forfatter<extra></extra>",
+        ))
+    fig.update_layout(
+        title=dict(text=title, font=dict(size=14)),
+        xaxis=dict(title="Udgivelsesår", dtick=1),
+        yaxis=dict(title="Publikationer pr. forfatter"),
+        plot_bgcolor="white", height=420,
+        legend=dict(orientation="h", yanchor="top", y=-0.2, xanchor="left", x=0),
+        margin=dict(t=50, b=70, l=10, r=10),
+    )
+    st.plotly_chart(fig, width="stretch", config=PLOTLY_CONFIG, key=f"trend_chart_{key_suffix}")
+
+    render_table_export(
+        data={str(year): cats for year, cats in sorted(ratio_data.items())},
+        row_label="År",
+        filename=f"{key_suffix}_over_tid.xlsx",
+        sheet_name="Publikationer pr. forfatter",
+        key=f"export_oversigt_{key_suffix}",
+    )
+
 def render(filters):
     st.markdown(
 """ 
@@ -304,14 +392,17 @@ i sidepanelet.
 """
     )
 
-    _tab_pub, _tab_auth = st.tabs(["Publikationer", "Forfattere"])
+    pub_trend = _query_pub_trend(filters)
+    author_trend = _query_author_trend(filters)
+
+    _tab_pub, _tab_auth, _tab_ratio = st.tabs(["Publikationer", "Forfattere", "Publikationer pr. forfatter"])
     with _tab_pub:
-        pub_trend = _query_pub_trend(filters)
         _render_org_trend(pub_trend, "Antal publikationer over tid (hele perioden)", key_suffix="pub")
     with _tab_auth:
-        author_trend = _query_author_trend(filters)
         _render_org_trend(author_trend, "Antal forfattere over tid (hele perioden)", key_suffix="auth")
-
+    with _tab_ratio:
+        _render_ratio_trend(pub_trend, author_trend, "Publikationer pr. forfatter over tid (hele perioden)", key_suffix="ratio")
+    
     st.markdown(
 """
 ---
