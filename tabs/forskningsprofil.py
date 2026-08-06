@@ -370,7 +370,9 @@ def _query_asjc_category_year_trend(filters, level, category_value, restrict_dom
     n_dims = len(dims)
     ac_sql, ac_params = author_count_filter(filters['min_forfattere'], filters['max_forfattere'])
 
-    dim_select = (", ".join(f"{col} AS dim_{i}" for i, col in enumerate(dims)) + ", ") if dims else ""
+    #dim_select = (", ".join(f"{col} AS dim_{i}" for i, col in enumerate(dims)) + ", ") if dims else ""
+    dim_select_inner = (", ".join(f"{col} AS dim_{i}" for i, col in enumerate(dims)) + ", ") if dims else ""
+    dim_select_outer = (", ".join(f"dim_{i}" for i in range(n_dims)) + ", ") if dims else ""
 
     base_where = f"""
         WHERE Intern       = 'Intern'
@@ -407,11 +409,11 @@ def _query_asjc_category_year_trend(filters, level, category_value, restrict_dom
 
     sql = f"""
         WITH exploded AS (
-            SELECT {dim_select}Year, PURE_ID, TRIM(UNNEST(STRING_SPLIT(ASJC_felter, '|'))) AS felt_abbr
+            SELECT {dim_select_inner}Year, PURE_ID, TRIM(UNNEST(STRING_SPLIT(ASJC_felter, '|'))) AS felt_abbr
             FROM pubs
             {base_where}
         )
-        SELECT {dim_select}Year, COUNT(DISTINCT PURE_ID) AS n
+        SELECT {dim_select_outer}Year, COUNT(DISTINCT PURE_ID) AS n
         FROM exploded
         WHERE {value_expr} = ? {restrict_sql}
         GROUP BY {", ".join(str(i) for i in range(1, n_dims + 2)) if dims else "1"}
