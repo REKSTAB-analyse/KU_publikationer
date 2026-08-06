@@ -15,6 +15,10 @@ if ERDA_ENABLED:
         "OpenAlex": str(_DATA_CACHE_DIR / "KU_pub_long_OpenAlex.parquet"),
         "SciVal":   str(_DATA_CACHE_DIR / "KU_pub_long_SciVal.parquet"),
     }
+    REFERENCE_TABLE_PATHS = {
+        "scival_topics": str(_DATA_CACHE_DIR / "SciVal_topics_reference.parquet"),
+        "scival_asjc":   str(_DATA_CACHE_DIR / "SciVal_ASJC_reference.parquet"),
+    }
 else:
     # Lokal udvikling: læs direkte fra dine egne, allerede byggede filer
     PARQUET_PATHS = {
@@ -22,6 +26,12 @@ else:
         "OpenAlex": r"H:\Publikationsapp\Data\KU_pub_long_OpenAlex.parquet",
         "SciVal":   r"H:\Publikationsapp\Data\KU_pub_long_SciVal.parquet",
     }
+    REFERENCE_TABLE_PATHS = {
+        "scival_topics": r"H:\Publikationsapp\Data\SciVal_topics_reference.parquet",
+        "scival_asjc":   r"H:\Publikationsapp\Data\SciVal_ASJC_reference.parquet",
+    }
+
+
 
 # --- Fakulteter ---
 FAC_ORDER = ["SAMF", "SCIENCE", "TEO", "SUND", "HUM", "JUR"]

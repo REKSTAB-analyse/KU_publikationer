@@ -2,6 +2,7 @@ from tracemalloc import Snapshot
 import sys
 from pathlib import Path
 import re
+import duckdb
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
  
@@ -11,7 +12,7 @@ import plotly.graph_objects as go
 from components.charts import fig_hbar_stacked, fig_year_trend, PLOTLY_CONFIG, domain_shaded_colors, _DOMAIN_COLORS, _hls_gradient
 from components.export import render_table_export
 from components.colors import ku_color_sequence, build_faculty_colors
-from config import FAC_ORDER
+from config import FAC_ORDER, REFERENCE_TABLE_PATHS
 from config import hier_cols, breakdown_label, doi_filter_sql, year_range_label, author_count_filter, show_ku_samlet
 
 _ASJC_FIELD_TO_DOMAIN = {
@@ -140,11 +141,26 @@ def _query_topic_section(filters, category_sql, extra_filter_sql="1=1", extra_fi
         result[dim_label][cat] = result[dim_label].get(cat, 0) + n
     
     if filters.get("mode", "F") == "F" and show_ku_samlet(filters):
-        ku_total = {}
-        for dim_data in result.values():
-            for cat, n in dim_data.items():
-                ku_total[cat] = ku_total.get(cat, 0) + n
-        result = {"KU samlet": ku_total, **result}
+        ku_sql = f"""
+            SELECT ({category_sql}) AS cat, COUNT(DISTINCT PURE_ID) AS n
+            FROM pubs
+            WHERE Intern       = 'Intern'
+              AND Fak          IN ({ph(filters['fakultet'])})
+              AND Inst         IN ({ph(filters['institutter'])})
+              AND Stil         IN ({ph(filters['stillingsgrupper'])})
+              AND Type        IN ({ph(filters['typer'])})
+              AND Sprog       IN ({ph(filters['sprog'])})
+              AND Peer_review IN ({ph(filters['peer'])})
+              AND Indholdstype IN ({ph(filters['indholdstyper'])})
+              AND ({doi_filter_sql(filters['har_doi'])})
+              AND COALESCE(Open_Access, 'Unknown') IN ({ph(filters['open_access'])})
+              AND Year        BETWEEN ? AND ?
+              AND ({ac_sql})
+              AND ({extra_filter_sql})
+            GROUP BY 1
+        """
+        ku_rows = get_cursor().execute(ku_sql, params).fetchall()
+        result = {"KU samlet": dict(ku_rows), **result}
     
     return result, cluster_map
 
@@ -354,7 +370,33 @@ def _query_category_year_trend(filters, category_sql, category_value, extra_filt
         by_year_unit.setdefault(year, {})[unit_label] = n
 
     if filters.get("mode", "F") == "F" and show_ku_samlet(filters):
-        merged = {year: {"KU samlet": sum(cats.values())} for year, cats in by_year_unit.items()}
+        ku_sql = f"""
+            SELECT Year, COUNT(DISTINCT PURE_ID) AS n
+            FROM pubs
+            WHERE Intern       = 'Intern'
+              AND Fak          IN ({ph(filters['fakultet'])})
+              AND Inst         IN ({ph(filters['institutter'])})
+              AND Stil         IN ({ph(filters['stillingsgrupper'])})
+              AND Type        IN ({ph(filters['typer'])})
+              AND Sprog       IN ({ph(filters['sprog'])})
+              AND Peer_review IN ({ph(filters['peer'])})
+              AND Indholdstype IN ({ph(filters['indholdstyper'])})
+              AND ({doi_filter_sql(filters['har_doi'])})
+              AND COALESCE(Open_Access, 'Unknown') IN ({ph(filters['open_access'])})
+              AND Year IS NOT NULL
+              AND ({ac_sql})
+              AND ({extra_filter_sql})
+              AND ({category_sql}) = ?
+            GROUP BY 1
+        """
+        ku_params = (
+            filters['fakultet'] + filters['institutter'] + filters['stillingsgrupper'] +
+            filters['typer'] + filters['sprog'] + filters['peer'] +
+            filters['indholdstyper'] + filters['open_access'] +
+            ac_params + list(extra_filter_params) + [category_value]
+        )
+        ku_rows = get_cursor().execute(ku_sql, ku_params).fetchall()
+        merged = {year: {"KU samlet": n} for year, n in ku_rows}
         return merged
 
     return by_year_unit
@@ -431,7 +473,20 @@ def _query_asjc_category_year_trend(filters, level, category_value, restrict_dom
         by_year_unit.setdefault(year, {})[unit_label] = n
 
     if filters.get("mode", "F") == "F" and show_ku_samlet(filters):
-        merged = {year: {"KU samlet": sum(cats.values())} for year, cats in by_year_unit.items()}
+        ku_sql = f"""
+            WITH exploded AS (
+                SELECT Year, PURE_ID, TRIM(UNNEST(STRING_SPLIT(ASJC_felter, '|'))) AS felt_abbr
+                FROM pubs
+                {base_where}
+            )
+            SELECT Year, COUNT(DISTINCT PURE_ID) AS n
+            FROM exploded
+            WHERE {value_expr} = ? {restrict_sql}
+            GROUP BY 1
+        """
+        ku_params = base_params + [category_value] + restrict_params
+        ku_rows = get_cursor().execute(ku_sql, ku_params).fetchall()
+        merged = {year: {"KU samlet": n} for year, n in ku_rows}
         return merged
 
     return by_year_unit
@@ -547,7 +602,25 @@ def _query_org_year_totals(filters):
         by_year_unit.setdefault(year, {})[unit_label] = n
 
     if filters.get("mode", "F") == "F" and show_ku_samlet(filters):
-        merged = {year: {"KU samlet": sum(cats.values())} for year, cats in by_year_unit.items()}
+        ku_sql = f"""
+            SELECT Year, COUNT(DISTINCT PURE_ID) AS n
+            FROM pubs
+            WHERE Intern       = 'Intern'
+              AND Fak          IN ({ph(filters['fakultet'])})
+              AND Inst         IN ({ph(filters['institutter'])})
+              AND Stil         IN ({ph(filters['stillingsgrupper'])})
+              AND Type        IN ({ph(filters['typer'])})
+              AND Sprog       IN ({ph(filters['sprog'])})
+              AND Peer_review IN ({ph(filters['peer'])})
+              AND Indholdstype IN ({ph(filters['indholdstyper'])})
+              AND ({doi_filter_sql(filters['har_doi'])})
+              AND COALESCE(Open_Access, 'Unknown') IN ({ph(filters['open_access'])})
+              AND Year IS NOT NULL
+              AND ({ac_sql})
+            GROUP BY 1
+        """
+        ku_rows = get_cursor().execute(ku_sql, params).fetchall()
+        merged = {year: {"KU samlet": n} for year, n in ku_rows}
         return merged
 
     return by_year_unit
@@ -603,6 +676,19 @@ def _clear_descendants(level_key: str) -> None:
             st.session_state.pop(widget_key, None)
             st.session_state.pop(f"_click_snapshot_{widget_key}", None)
         _clear_descendants(child)
+
+@st.cache_data
+def _load_scival_reference_table(kind: str):
+    """Indlæser de lokalt byggede opslagstabeller (build_scival_reference_tables.py)
+    direkte via DuckDB, som en PyArrow-tabel - IKKE pandas, og IKKE noget
+    SciVal selv stiller til rådighed, men afledt af KU's egne, allerede
+    indsamlede publikationer. Returnerer None, hvis filen ikke findes endnu."""
+    key = "scival_topics" if kind == "topics" else "scival_asjc"
+    path = REFERENCE_TABLE_PATHS[key]
+    if not Path(path).exists():
+        return None
+    return duckdb.connect().execute(f"SELECT * FROM read_parquet('{path}')").fetch_arrow_table()
+
 
 def _render_topic_section(filters, dim_col, category_sql, title_prefix, chart_mode="antal", top_x=None,
                            clickable=False, key_suffix="", level_key="", extra_filter_sql="1=1", extra_filter_params=(),
@@ -1065,6 +1151,18 @@ har valgt i sidepanelet.
 """
             )
 
+            _topics_ref = _load_scival_reference_table("topics")
+            if _topics_ref is not None:
+                with st.expander("Se opslagstabel"):
+                    st.markdown(
+"""
+Denne tabel stilles **ikke** til rådighed af SciVal selv - den er bygget lokalt ud fra
+KU's egne, allerede indsamlede publikationer, og viser derfor kun de værdier, der faktisk
+forekommer i data, ikke en global, udtømmende liste. 
+"""
+                    )
+                    st.dataframe(_topics_ref, width="stretch", hide_index=True)
+
             _max_tc = _count_categories(filters, "COALESCE(Topic_cluster, 'Ukendt')")
             _topx_tc = st.number_input(
                 "Vis top-X Topic Clusters (resten samles i 'Andet')",
@@ -1144,6 +1242,19 @@ med under **flere** fagområder/felter/kategorier samtidig, hvis dens tidsskrift
 andelene på hvert niveau summerer derfor ikke nødvendigvis til 100%.
 """
             )
+
+            _asjc_ref = _load_scival_reference_table("asjc")
+            if _asjc_ref is not None:
+                with st.expander("Se opslagstabel"):
+                    st.markdown(
+"""
+Denne tabel stilles **ikke** til rådighed af SciVal selv - den er bygget lokalt ud fra
+KU's egne, allerede indsamlede publikationer, og viser derfor kun de værdier, der faktisk
+forekommer i data, ikke en global, udtømmende liste. 
+"""
+                    )
+                    st.dataframe(_asjc_ref, width="stretch", hide_index=True)
+
             _render_asjc_section(
                 filters, "domain", "Fagområde",
                 clickable=True, key_suffix="domain", level_key="asjc_domain",

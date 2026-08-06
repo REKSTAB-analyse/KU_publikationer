@@ -11,13 +11,15 @@ from datetime import datetime
 import duckdb
 import paramiko
 
-from config import FAC_ORDER, STILLINGSGRUPPER, PARQUET_PATHS, hier_cols, doi_filter_sql, author_count_filter
+from config import FAC_ORDER, STILLINGSGRUPPER, PARQUET_PATHS, REFERENCE_TABLE_PATHS, hier_cols, doi_filter_sql, author_count_filter
 
 @st.cache_resource()
 def _sync_parquet_from_erda():
     """Henter de tre parquet-filer fra ERDA via SFTP ned på de stier,
     PARQUET_PATHS allerede peger på - resten af loader.py er uændret,
-    den læser stadig bare lokale filer bagefter."""
+    den læser stadig bare lokale filer bagefter. Synkroniserer samtidig
+    SciVal-reference-tabellerne, hvis de findes på ERDA (ikke kritisk,
+    hvis de mangler - appens hovedfunktion afhænger ikke af dem)."""
     erda = st.secrets["erda"]
 
     print("[ERDA-sync] Forbinder til ERDA...", flush=True)
@@ -34,6 +36,17 @@ def _sync_parquet_from_erda():
             print(f"[ERDA-sync] Henter {remote_path} ...", flush=True)
             sftp.get(remote_path, local_path)
             print(f"[ERDA-sync] Færdig: {local_path}", flush=True)
+
+        for name, local_path in REFERENCE_TABLE_PATHS.items():
+            remote_filename = Path(local_path).name
+            remote_path = f"{erda['data_path']}/{remote_filename}"
+            Path(local_path).parent.mkdir(parents=True, exist_ok=True)
+            try:
+                print(f"[ERDA-sync] Henter {remote_path} ...", flush=True)
+                sftp.get(remote_path, local_path)
+                print(f"[ERDA-sync] Færdig: {local_path}", flush=True)
+            except FileNotFoundError:
+                print(f"[ERDA-sync] {remote_filename} findes ikke endnu på ERDA - springer over.", flush=True)
     finally:
         sftp.close()
         transport.close()
