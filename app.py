@@ -26,12 +26,13 @@ def main():
         layout="wide",
     )
 
-    # --- Skriftstørrelse i radio buttons ---
+    # --- Skriftstørrelse i widgets ---
     st.markdown(
         """
         <style>
-        div[data-testid="stRadio"] [data-testid="stWidgetLabel"] p {
+        [data-testid="stWidgetLabel"] p {
             font-size: 1rem !important;
+            font-weight: 600 !important;
         }
         </style>
         """,
