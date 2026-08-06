@@ -64,9 +64,11 @@ publikationstype eller tilføje en diversitetsdimension.
                     options=FAC_ORDER, default=[], key="sp_fakultet",
                 )
                 filters["fakultet"] = valgte_fak or FAC_ORDER
+                filters["fakultet_explicit"] = bool(valgte_fak)
             else:
                 filters["fakultet"] = FAC_ORDER
-            
+                filters["fakultet_explicit"] = False
+                
             if show_inst:
                 institut_opts = load_institut_options(data_source, filters["fakultet"])
                 valgte_inst = st.multiselect(
