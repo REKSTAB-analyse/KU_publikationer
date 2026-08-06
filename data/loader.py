@@ -270,4 +270,5 @@ def load_max_author_count(data_source: str, filters: dict) -> int:
         [filters['aar_fra'], filters['aar_til']]
     )
     result = conn.execute(sql, params).fetchone()
-    return result[0] or 1
+    max_val = result[0]
+    return int(max_val) if max_val is not None else 1
