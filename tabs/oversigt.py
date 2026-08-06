@@ -7,7 +7,8 @@ from data.loader import get_cursor
 from components.charts import fig_year_trend, PLOTLY_CONFIG
 import plotly.graph_objects as go
 from config import doi_filter_sql, author_count_filter, hier_cols, show_ku_samlet
-from components.colors import build_faculty_colors
+from components.colors import build_faculty_colors, ku_color_sequence
+from components.charts import fig_year_trend, PLOTLY_CONFIG, _hls_gradient
  
 def _base_where_and_params(filters, alias=""):
     ph = lambda lst: ", ".join(["?" for _ in lst])
@@ -216,8 +217,39 @@ def _render_org_trend(trend_data, title, key_suffix):
     units = sorted({u for cats in trend_data.values() for u in cats}, key=lambda u: (u != "KU samlet", u))
 
     faculty_colors = build_faculty_colors()
-    colors = {u: ("#901a1e" if u == "KU samlet" else faculty_colors.get(u, "#666666")) for u in units}
 
+    totals = {}
+    for cats in trend_data.values():
+        for u, n in cats.items():
+            totals[u] = totals.get(u, 0) + n
+
+    colors = {}
+    for u in units:
+        if u == "KU samlet":
+            colors[u] = "#901a1e"
+        elif u in faculty_colors:
+            colors[u] = faculty_colors[u]
+
+    # Institut-niveau ("Institut | Fakultet"): knækkede nuancer af moderfakultetets
+    # farve, samme opskrift som treemap'et og Forskningsprofils historik-grafer.
+    inst_units = [u for u in units if u not in colors]
+    by_faculty = {}
+    for u in inst_units:
+        parts = u.split(" | ")
+        parent_fak = parts[-1] if len(parts) > 1 else None
+        by_faculty.setdefault(parent_fak, []).append(u)
+
+    for parent_fak, insts in by_faculty.items():
+        insts_sorted = sorted(insts, key=lambda u: -totals.get(u, 0))
+        base = faculty_colors.get(parent_fak)
+        if base:
+            shades = _hls_gradient(base, len(insts_sorted))
+            for i, u in enumerate(insts_sorted):
+                colors[u] = shades[i]
+        else:
+            fallback = ku_color_sequence(len(insts_sorted))
+            for i, u in enumerate(insts_sorted):
+                colors[u] = fallback[i]
     fig = go.Figure()
     for unit in units:
         y_vals = [trend_data.get(year, {}).get(unit, 0) for year in years_sorted]
