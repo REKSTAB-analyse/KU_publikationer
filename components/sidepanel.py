@@ -22,7 +22,7 @@ publikationstype eller tilføje en diversitetsdimension.
             data_source = st.radio(
                 "Vælg datakilde",
                 options = ["CURIS", "OpenAlex", "SciVal"],
-                index = 2,
+                index = 0,
                 key = "data_source_radio",
                 help = "Vælg datakilden, som skal ligge til grund for analyserne"
             )
