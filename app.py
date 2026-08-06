@@ -26,6 +26,18 @@ def main():
         layout="wide",
     )
 
+    # --- Skriftstørrelse i radio buttons ---
+    st.markdown(
+        """
+        <style>
+        div[data-testid="stRadio"] [data-testid="stWidgetLabel"] p {
+            font-size: 1rem !important;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
     # --- Synkroniser data fra ERDA, før noget forsøger at læse dem ---
     if ERDA_ENABLED:
         _sync_parquet_from_erda()
