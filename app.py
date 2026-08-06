@@ -26,13 +26,17 @@ def main():
         layout="wide",
     )
 
-    # --- Skriftstørrelse i widgets ---
+    # --- Skriftstørrelse i widgets (undtagen sidepanelet) ---
     st.markdown(
         """
         <style>
         [data-testid="stWidgetLabel"] p {
             font-size: 1rem !important;
             font-weight: 600 !important;
+        }
+        [data-testid="stSidebar"] [data-testid="stWidgetLabel"] p {
+            font-size: unset !important;
+            font-weight: unset !important;
         }
         </style>
         """,

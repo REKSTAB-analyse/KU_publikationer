@@ -68,17 +68,17 @@ publikationstype eller tilføje en diversitetsdimension.
             else:
                 filters["fakultet"] = FAC_ORDER
                 filters["fakultet_explicit"] = False
-                
+
             if show_inst:
                 institut_opts = load_institut_options(data_source, filters["fakultet"])
                 valgte_inst = st.multiselect(
                 "Vælg institut (tom = alle)",
                 options=institut_opts, default=[], key="sp_institut",
                 )
-                filters["institutter"] = valgte_inst or institut_opts
+                filters["institutter"] = valgte_inst or institut_opts or ["__INGEN_INSTITUT__"]
             else:
                 institut_opts = load_institut_options(data_source, filters["fakultet"])
-                filters["institutter"] = institut_opts
+                filters["institutter"] = institut_opts or ["__INGEN_INSTITUT__"]
 
             if show_grp:
                 valgte_still = st.multiselect(

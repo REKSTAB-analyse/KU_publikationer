@@ -369,7 +369,7 @@ def _query_category_year_trend(filters, category_sql, category_value, extra_filt
         unit_label = " | ".join(str(v) for v in reversed(dim_values)) if dim_values else "KU samlet"
         by_year_unit.setdefault(year, {})[unit_label] = n
 
-    if filters.get("mode", "F") == "F" and show_ku_samlet(filters):
+    if filters.get("mode", "F") == "F" and not filters.get("fakultet_explicit", False):
         ku_sql = f"""
             SELECT Year, COUNT(DISTINCT PURE_ID) AS n
             FROM pubs
@@ -472,7 +472,7 @@ def _query_asjc_category_year_trend(filters, level, category_value, restrict_dom
         unit_label = " | ".join(str(v) for v in reversed(dim_values)) if dim_values else "KU samlet"
         by_year_unit.setdefault(year, {})[unit_label] = n
 
-    if filters.get("mode", "F") == "F" and show_ku_samlet(filters):
+    if filters.get("mode", "F") == "F" and not filters.get("fakultet_explicit", False):
         ku_sql = f"""
             WITH exploded AS (
                 SELECT Year, PURE_ID, TRIM(UNNEST(STRING_SPLIT(ASJC_felter, '|'))) AS felt_abbr
@@ -601,7 +601,7 @@ def _query_org_year_totals(filters):
         unit_label = " | ".join(str(v) for v in reversed(dim_values)) if dim_values else "KU samlet"
         by_year_unit.setdefault(year, {})[unit_label] = n
 
-    if filters.get("mode", "F") == "F" and show_ku_samlet(filters):
+    if filters.get("mode", "F") == "F" and not filters.get("fakultet_explicit", False):
         ku_sql = f"""
             SELECT Year, COUNT(DISTINCT PURE_ID) AS n
             FROM pubs
@@ -887,9 +887,11 @@ def render(filters):
 """
 ### Forskningsprofil
 
-Fanen kortlægger KU's faglige profil på baggrund af publikationernes emneområder, baseret på OpenAlex' 
-eller SciVals emneklassifikation - CURIS indeholder ikke selv en (XX pålidelig - spørg Svend, om hvordan klassifikation sker) emneklassifikation af 
-publikationer. 
+Fanen kortlægger KU's faglige profil på baggrund af publikationernes emneområder, baseret på OpenAlex'
+eller SciVal's emneklassifikation. CURIS har sin egen klassifikation (`mainResearchArea`, KU's hovedområdeinddeling, 
+f.eks. "Sundhedsvidenskab") - men den er langt grovere end OpenAlex' og SciVal's (kun 5 hovedområder, 
+ikke domæner/felter/underfelter/emner), og vi kender endnu ikke metoden bag selve tildelingen (XXX spørg Svend). 
+Fanen bruger derfor (XXX indtil videre) OpenAlex/SciVal som primær kilde.
 """)
 
     data_source = filters.get("data_source", "CURIS")
@@ -900,13 +902,6 @@ publikationer.
         return 
     
     if data_source == "OpenAlex":
-        st.markdown(
-"""
-Domæne-figuren nedenfor viser den bredeste inddeling; klik på en søjle for at zoome ind på dens felter, 
-og videre ned gennem underfelter til specifikke emner. Hvert niveau kan brydes ned på de organisatoriske 
-niveauer, du har valgt i sidepanelet - f.eks. to fakulteter samtidig, så du direkte kan sammenligne
-deres faglige profil. 
-""")
         with st.expander("Sådan klassificerer OpenAlex emneområder"):
             st.markdown(
 """
@@ -930,10 +925,6 @@ sin score; det højest scorende bliver publikationens primære emne.
 *Management, Monitoring, Policy, and Law*, feltet *Environmental Science* og 
 domænet *Physical Sciences*. ([CNRS' OpenAlex-brugerguide](https://www.science-ouverte.cnrs.fr/wp-content/uploads/2026/02/20260209_OpenAlex_Discovery-User-Guide_CNRS_2026.pdf))
 
-Hele taksonomien - alle domæner, felter, underfelter og emner, med tilhørende nøgleord, en kort
-beskrivelse og et Wikipedia-link per emne - kan slås op i 
-[OpenAlex' fulde emne-opslagstabel](https://docs.google.com/spreadsheets/d/1v-MAq64x4YjhO7RWcB-yrKV5D_2vOOsxl4u6GBKEXY8/edit?gid=983250122#gid=983250122).
-
 **Sådan bygges og tildeles emnerne**
 
 Selve emnetaksonomien (de 4500 kategorier) er bygget ud fra 71 millioner
@@ -949,6 +940,31 @@ abstract og citationer som input - så selv publikationer
 uden citationer kan klassificeres. ([Analyse af klassifikationsmodellen](https://arxiv.org/pdf/2408.04163))
 """
             )
+        
+        with st.expander("Se opslagstabel"):
+            st.markdown(
+"""
+Denne tabel stilles **til rådighed af OpenAlex selv**, i modsætning til de tilsvarende
+SciVal/ASJC-tabeller andetsteds i denne fane, som er bygget lokalt ud fra KU's egne data.
+Det betyder også, at den er **udtømmende**: hele taksonomien - alle domæner, felter,
+underfelter og emner, der findes i OpenAlex globalt, ikke kun dem der forekommer i KU's
+publikationer - med tilhørende nøgleord, en kort beskrivelse og et Wikipedia-link per emne,
+kan slås op i
+[OpenAlex' fulde emne-opslagstabel](https://docs.google.com/spreadsheets/d/1v-MAq64x4YjhO7RWcB-yrKV5D_2vOOsxl4u6GBKEXY8/edit?gid=983250122#gid=983250122).
+"""
+            )
+
+        st.markdown(
+"""
+---
+
+##### Domæner
+
+Figuren nedenfor viser den bredeste inddeling; klik på en søjle for at zoome ind på dens felter, 
+og videre ned gennem underfelter til specifikke emner. Hvert niveau kan brydes ned på de organisatoriske 
+niveauer, du har valgt i sidepanelet - f.eks. to fakulteter samtidig, så du direkte kan sammenligne
+deres faglige profil. 
+""")
 
         _TOPX_DEFAULT = 10
 
@@ -1115,6 +1131,7 @@ sammensat af citationstal, Scopus-visninger og gennemsnitlig CiteScore for de
 seneste to år. Prominence er bevidst ikke et kvalitets- eller vigtighedsmål, 
 kun et udtryk for, hvor meget opmærksomhed et emne får lige nu.
 ([SciVal Metrics and Indicators](https://elsevier.libguides.com/c.php?g=1328583&p=9781971))
+Prominence for hvert topic kan ses i opslagstabellen.
 
 **Alternativ: ASJC-klassifikation**
 
@@ -1143,25 +1160,30 @@ fagområder.
         )
 
         if _sv_visning == "Topics og Topic Clusters":
-            st.markdown(
-"""
-Topic Cluster-figuren nedenfor viser den bredeste inddeling: klik på en søjle for at 
-zoome ind på dens Topics. Hver niveau brydes ned på de organisatoriske niveauer, du 
-har valgt i sidepanelet.  
-"""
-            )
-
             _topics_ref = _load_scival_reference_table("topics")
             if _topics_ref is not None:
                 with st.expander("Se opslagstabel"):
                     st.markdown(
 """
-Denne tabel stilles **ikke** til rådighed af SciVal selv - den er bygget lokalt ud fra
+Denne tabel stilles **ikke til rådighed af SciVal selv** - den er bygget lokalt ud fra
 KU's egne, allerede indsamlede publikationer, og viser derfor kun de værdier, der faktisk
 forekommer i data, ikke en global, udtømmende liste. 
 """
                     )
                     st.dataframe(_topics_ref, width="stretch", hide_index=True)
+                    st.caption("Prominence måler aktuel opmærksomhed, **ikke** kvalitet eller vigtighed.")
+
+            st.markdown(
+"""
+---
+
+##### Topic Clusters
+
+Topic Cluster-figuren nedenfor viser den bredeste inddeling: klik på en søjle for at 
+zoome ind på dens Topics. Hver niveau brydes ned på de organisatoriske niveauer, du 
+har valgt i sidepanelet.  
+"""
+            )
 
             _max_tc = _count_categories(filters, "COALESCE(Topic_cluster, 'Ukendt')")
             _topx_tc = st.number_input(
@@ -1234,26 +1256,31 @@ forekommer i data, ikke en global, udtømmende liste.
                         _render_category_trend(_trend, _clicked_sv_topic_p, key_suffix="sv_topic_trend_pct", chart_mode="pct", year_totals=_trend_totals)
 
         else:
+            
+            _asjc_ref = _load_scival_reference_table("asjc")
+            if _asjc_ref is not None:
+                with st.expander("Se opslagstabel"):
+                    st.markdown(
+"""
+Denne tabel stilles **ikke til rådighed af SciVal selv** - den er bygget lokalt ud fra
+KU's egne, allerede indsamlede publikationer, og viser derfor kun de værdier, der faktisk
+forekommer i data, ikke en global, udtømmende liste. 
+"""
+                    )
+                    st.dataframe(_asjc_ref, width="stretch", hide_index=True)
+
             st.markdown(
 """
+---
+
+##### Fagområder
+
 Figuren nedenfor viser andelen af publikationer klassificeret under hvert fagområde - klik på en søjle
 for at zoome ind på dens hovedfelter, og videre ned til specifikke kategorier. En publikation kan tælle
 med under **flere** fagområder/felter/kategorier samtidig, hvis dens tidsskrift dækker mere end ét område -
 andelene på hvert niveau summerer derfor ikke nødvendigvis til 100%.
 """
             )
-
-            _asjc_ref = _load_scival_reference_table("asjc")
-            if _asjc_ref is not None:
-                with st.expander("Se opslagstabel"):
-                    st.markdown(
-"""
-Denne tabel stilles **ikke** til rådighed af SciVal selv - den er bygget lokalt ud fra
-KU's egne, allerede indsamlede publikationer, og viser derfor kun de værdier, der faktisk
-forekommer i data, ikke en global, udtømmende liste. 
-"""
-                    )
-                    st.dataframe(_asjc_ref, width="stretch", hide_index=True)
 
             _render_asjc_section(
                 filters, "domain", "Fagområde",
