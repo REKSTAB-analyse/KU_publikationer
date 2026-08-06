@@ -505,15 +505,40 @@ def _render_category_trend(trend_data, label, key_suffix, chart_mode="antal", ye
     units = sorted({u for cats in trend_data.values() for u in cats}, key=lambda u: (u != "KU samlet", u))
 
     faculty_colors = build_faculty_colors()
-    palette = ku_color_sequence(len(units))
+
+    totals = {}
+    for cats in trend_data.values():
+        for u, n in cats.items():
+            totals[u] = totals.get(u, 0) + n
+
     colors = {}
-    for i, u in enumerate(units):
+    for u in units:
         if u == "KU samlet":
             colors[u] = "#901a1e"
         elif u in FAC_ORDER:
             colors[u] = faculty_colors.get(u, "#666666")
+
+    # Institut-niveau ("Institut | Fakultet"): knækkede nuancer af moderfakultetets
+    # farve, samme opskrift som treemap'et - grupperet pr. fakultet, størst institut
+    # (efter samlet volumen) får den mørkeste/mest "rene" nuance.
+    inst_units = [u for u in units if u not in colors]
+    by_faculty = {}
+    for u in inst_units:
+        parts = u.split(" | ")
+        parent_fak = parts[-1] if len(parts) > 1 else None
+        by_faculty.setdefault(parent_fak, []).append(u)
+
+    for parent_fak, insts in by_faculty.items():
+        insts_sorted = sorted(insts, key=lambda u: -totals.get(u, 0))
+        base = faculty_colors.get(parent_fak)
+        if base:
+            shades = _hls_gradient(base, len(insts_sorted))
+            for i, u in enumerate(insts_sorted):
+                colors[u] = shades[i]
         else:
-            colors[u] = palette[i]
+            fallback = ku_color_sequence(len(insts_sorted))
+            for i, u in enumerate(insts_sorted):
+                colors[u] = fallback[i]
 
     fig = go.Figure()
     for unit in units:
@@ -887,19 +912,52 @@ def render(filters):
 """
 ### Forskningsprofil
 
-Fanen kortlægger KU's faglige profil på baggrund af publikationernes emneområder, baseret på OpenAlex'
-eller SciVal's emneklassifikation. CURIS har sin egen klassifikation (`mainResearchArea`, KU's hovedområdeinddeling, 
-f.eks. "Sundhedsvidenskab") - men den er langt grovere end OpenAlex' og SciVal's (kun 5 hovedområder, 
-ikke domæner/felter/underfelter/emner), og vi kender endnu ikke metoden bag selve tildelingen (XXX spørg Svend). 
-Fanen bruger derfor (XXX indtil videre) OpenAlex/SciVal som primær kilde.
+Fanen kortlægger KU's faglige profil på baggrund af publikationernes emneområder. Klassifikationen
+afhænger af den valgte datakilde i sidepanelet: OpenAlex og SciVal tilbyder begge et hierarki
+(fra brede domæner til specifikke emner), men CURIS' egen klassifikation ('Hovedområde') er langt
+grovere - kun fem kategorier, inden underinddeling - men til gengæld dækker den alle publikationer, 
+uafhængigt af DOI-matchning. Metoden bag selve CURIS-emnetildelingen er endnu ikke afklaret 
+(XXX spørg Svend).
+
 """)
 
     data_source = filters.get("data_source", "CURIS")
 
     if data_source == "CURIS":
-        st.error("CURIS indeholder ikke en emneklassifikation af publikationer. "
-        " Vælg OpenAlex eller SciVal som datakilde i sidepanelet for at se fanens indhold.")
-        return 
+        
+        st.markdown(
+"""
+Nedenfor ses CURIS' indeling af publikationer i hovedområder. 
+
+##### Hovedområder 
+
+"""
+        )
+
+        _tab_ho_n, _tab_ho_p = st.tabs(["Antal", "Andel (%)"])
+        with _tab_ho_n:
+            _render_topic_section(
+                filters, "Hovedomraade_en", "COALESCE(Hovedomraade_en, 'Ukendt')", "Hovedområde",
+                chart_mode="antal", clickable=True, key_suffix="hovedomraade_antal",
+                level_key="hovedomraade", use_domain_colors=False,
+            )
+            _clicked_hovedomraade_n = st.session_state.get("_resolved_hovedomraade")
+            if _clicked_hovedomraade_n:
+                _trend = _query_category_year_trend(filters, "COALESCE(Hovedomraade_en, 'Ukendt')", _clicked_hovedomraade_n)
+                _render_category_trend(_trend, _clicked_hovedomraade_n, key_suffix="hovedomraade_trend_antal", chart_mode="antal")
+        with _tab_ho_p:
+            _render_topic_section(
+                filters, "Hovedomraade_en", "COALESCE(Hovedomraade_en, 'Ukendt')", "Hovedområde",
+                chart_mode="pct", clickable=True, key_suffix="hovedomraade_pct",
+                level_key="hovedomraade", use_domain_colors=False,
+            )
+            _clicked_hovedomraade_p = st.session_state.get("_resolved_hovedomraade")
+            if _clicked_hovedomraade_p:
+                _trend = _query_category_year_trend(filters, "COALESCE(Hovedomraade_en, 'Ukendt')", _clicked_hovedomraade_p)
+                _trend_totals = _query_org_year_totals(filters)
+                _render_category_trend(_trend, _clicked_hovedomraade_p, key_suffix="hovedomraade_trend_pct", chart_mode="pct", year_totals=_trend_totals)
+
+        return
     
     if data_source == "OpenAlex":
         with st.expander("Sådan klassificerer OpenAlex emneområder"):
