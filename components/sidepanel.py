@@ -29,7 +29,8 @@ publikationstype eller tilføje en diversitetsdimension.
             filters["data_source"] = data_source
             opts = load_filter_options(data_source)
 
-            year_min = 2000
+            #year_min = 2000
+            year_min = 2021
             year_max = 2026 #max(opts["year"])
             aar_range = st.slider(
                 "Vælg udgivelsesår",
@@ -76,9 +77,11 @@ publikationstype eller tilføje en diversitetsdimension.
                 options=institut_opts, default=[], key="sp_institut",
                 )
                 filters["institutter"] = valgte_inst or institut_opts or ["__INGEN_INSTITUT__"]
+                filters["institutter_explicit"] = bool(valgte_inst)
             else:
                 institut_opts = load_institut_options(data_source, filters["fakultet"])
                 filters["institutter"] = institut_opts or ["__INGEN_INSTITUT__"]
+                filters["institutter_explicit"] = False
 
             if show_grp:
                 valgte_still = st.multiselect(
@@ -86,8 +89,10 @@ publikationstype eller tilføje en diversitetsdimension.
                     options=STILLINGSGRUPPER, default=[], key="sp_stillingsgrupper",
                 )
                 filters["stillingsgrupper"] = valgte_still or STILLINGSGRUPPER
+                filters["stillingsgrupper_explicit"] = bool(valgte_still)
             else:
                 filters["stillingsgrupper"] = STILLINGSGRUPPER
+                filters["stillingsgrupper_explicit"] = False
 
         with st.expander("**Diversitet**"):
             valgte_køn = st.multiselect(
