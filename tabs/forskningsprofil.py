@@ -514,7 +514,7 @@ def _render_category_trend(trend_data, label, key_suffix, chart_mode="antal", ye
     colors = {}
     for u in units:
         if u == "KU samlet":
-            colors[u] = "#901a1e"
+            colors[u] = "#666666"
         elif u in FAC_ORDER:
             colors[u] = faculty_colors.get(u, "#666666")
 
@@ -570,8 +570,8 @@ def _render_category_trend(trend_data, label, key_suffix, chart_mode="antal", ye
             range=[0, 100] if chart_mode == "pct" else None,
         ),
         plot_bgcolor="white", height=380,
-        legend=dict(orientation="h", yanchor="top", y=-0.2, xanchor="left", x=0),
-        margin=dict(t=50, b=70, l=10, r=10),
+        legend=dict(orientation="v", yanchor="middle", y=0.5, xanchor="left", x=1.02),
+        margin=dict(t=50, b=10, l=10, r=150),
     )
     st.plotly_chart(fig, width="stretch", config=PLOTLY_CONFIG, key=f"trend_chart_{key_suffix}")
 
@@ -931,6 +931,11 @@ Nedenfor ses CURIS' indeling af publikationer i hovedområder.
 
 ##### Hovedområder 
 
+Fordelingen er opgjort på tværs af de valgte organisatoriske niveauer. Da hver publikation
+kun har ét Hovedområde, summerer andelene her altid til 100%.
+
+**Eksempel**: 70 % 'Health sciences' for SUND betyder, at 70 % af SUND's publikationer i alt
+er klassificeret under det hovedområde.
 """
         )
 
@@ -1022,6 +1027,9 @@ Figuren nedenfor viser den bredeste inddeling; klik på en søjle for at zoome i
 og videre ned gennem underfelter til specifikke emner. Hvert niveau kan brydes ned på de organisatoriske 
 niveauer, du har valgt i sidepanelet - f.eks. to fakulteter samtidig, så du direkte kan sammenligne
 deres faglige profil. 
+
+**Eksempel**: 60 % Health Sciences for SUND betyder, at 60 % af SUND's publikationer er klassificeret under 
+det domæne. 
 """)
 
         _TOPX_DEFAULT = 10
@@ -1239,7 +1247,11 @@ forekommer i data, ikke en global, udtømmende liste.
 
 Topic Cluster-figuren nedenfor viser den bredeste inddeling: klik på en søjle for at 
 zoome ind på dens Topics. Hver niveau brydes ned på de organisatoriske niveauer, du 
-har valgt i sidepanelet.  
+har valgt i sidepanelet.
+
+**Eksempel**: 45 % 'Cancer Biology' for Sund betyder, at 45 % af SUND's publikationer hører under det
+Topic Cluster. Da hver publikation kun hører til ét Topic (og dermed ét Topic Cluster), summerer andelene her
+altid til 100 %. 
 """
             )
 
@@ -1337,6 +1349,10 @@ Figuren nedenfor viser andelen af publikationer klassificeret under hvert fagomr
 for at zoome ind på dens hovedfelter, og videre ned til specifikke kategorier. En publikation kan tælle
 med under **flere** fagområder/felter/kategorier samtidig, hvis dens tidsskrift dækker mere end ét område -
 andelene på hvert niveau summerer derfor ikke nødvendigvis til 100%.
+
+**Eksempel**: har et tidsskrift ASJC-koder i både Health Sciences og Life Sciences, tæller en publikation heri
+med i **begge** kategoriers andel - summen af Health Science (60 %) og Life Sciences (55 %) kan derfor sagtens
+overstige 100 %. 
 """
             )
 

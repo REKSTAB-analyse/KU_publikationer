@@ -681,13 +681,15 @@ i sidepanelet.
     st.markdown(
 """
 Figurene nedenfor viser, hvilke lande KU's eksterne medforfattere kommer fra, fordelt på de valgte organisatoriske
-enheder - samme opgørelse som kortet ovenfor, bare brudt ned per enhed. 
+enheder - samme opgørelse som kortet ovenfor, bare brudt ned per enhed. **'Ukendt'** dækker eksterne
+medforfattere, hvor landetilknytning ikke er registreret i CURIS.
 
-**Andel (%) angiver andelen af enhedens publikationer, ikke andelen af forfattere**: for SCIENCE 
-kunne det for eksempel betyde, at 1% af SCIENCE's publikationer har mindst én ekstern medforfatter
-fra Storbritannien - ikke at 1% af alle forfattere (interne og eksterne tilsammen) på SCIENCE's
-publikationer er britiske. En publikation med flere medforfattere fra samme land tælles kun med 
-én gang.
+**Andel (%) angiver andelen af enhedens publikationer, ikke andelen af forfattere.**
+
+**Eksempel**: 1% Storbritannien for SCIENCE betyder, at 1 % af SCIENCE's publikationer har mindst én
+ekstern medforfatter fra Storbritannien - ikke at 1 % af alle forfattere (interne og eksterne
+tilsammen) på SCIENCE's publikationer er britiske. En publikation med flere medforfattere fra
+samme land tælles kun med én gang.
 """)
 
     _land_data, _land_cm = _query_land_by_org(filters, mode)

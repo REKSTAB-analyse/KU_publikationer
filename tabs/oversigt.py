@@ -227,7 +227,7 @@ def _render_org_trend(trend_data, title, key_suffix):
     colors = {}
     for u in units:
         if u == "KU samlet":
-            colors[u] = "#901a1e"
+            colors[u] = "#666666"
         elif u in faculty_colors:
             colors[u] = faculty_colors[u]
 
@@ -265,8 +265,8 @@ def _render_org_trend(trend_data, title, key_suffix):
         xaxis=dict(title="Udgivelsesår", dtick=1),
         yaxis=dict(title="Antal"),
         plot_bgcolor="white", height=420,
-        legend=dict(orientation="h", yanchor="top", y=-0.2, xanchor="left", x=0),
-        margin=dict(t=50, b=70, l=10, r=10),
+        legend=dict(orientation="v", yanchor="middle", y=0.5, xanchor="left", x=1.02),
+        margin=dict(t=50, b=10, l=10, r=150),
     )
     st.plotly_chart(fig, width="stretch", config=PLOTLY_CONFIG, key=f"trend_chart_{key_suffix}")
 
@@ -301,7 +301,7 @@ def _render_ratio_trend(pub_trend, author_trend, title, key_suffix):
     colors = {}
     for u in units:
         if u == "KU samlet":
-            colors[u] = "#901a1e"
+            colors[u] = "#666666"
         elif u in faculty_colors:
             colors[u] = faculty_colors[u]
 
@@ -344,8 +344,8 @@ def _render_ratio_trend(pub_trend, author_trend, title, key_suffix):
         xaxis=dict(title="Udgivelsesår", dtick=1),
         yaxis=dict(title="Publikationer pr. forfatter"),
         plot_bgcolor="white", height=420,
-        legend=dict(orientation="h", yanchor="top", y=-0.2, xanchor="left", x=0),
-        margin=dict(t=50, b=70, l=10, r=10),
+        legend=dict(orientation="v", yanchor="middle", y=0.5, xanchor="left", x=1.02),
+        margin=dict(t=50, b=10, l=10, r=150),
     )
     st.plotly_chart(fig, width="stretch", config=PLOTLY_CONFIG, key=f"trend_chart_{key_suffix}")
 
@@ -382,13 +382,21 @@ publikationer, der udgives, og hvordan outputtet fordeler sig på organisatorisk
 
     st.markdown(
 """
+**Forfattere** tæller unikke KU-ID'er blandt dem, der har mindst én publikation i den valgte periode - se 
+Forfatterprofil for detaljer. **Internationalt samarbejde** angiver andelen af publikationer med mindst én ekstern 
+medforfatter fra et andet land end Danmark; danske eksterne samarbejdspartnere (f.eks. andre universiteter eller 
+hospitaler) tæller ikke med i dette tal. 
+
+**Eksempel**: er 'Internationalt samarbejde' 35 % betyder det, at 30 % af publikationer har mindst én medforfatter
+fra et andet land end Danmark - ikke at 35 % af alle medforfattere er udenlandske. 
+
 ---
 
 #### Udvikling over tid
 
 Graferne nedenfor dækker altid hele den tilgængelige periode, uanset sidepanelets valgte årsinterval - 
-øvrige filtre gælder stadig, så du kan zoome ind på en specifik enhed ved at anvende organisationsfiltrene
-i sidepanelet.
+øvrige filtre gælder stadig, inklusiv valg af fakultet/institut. Er intet valgt i sidepanelet, dækker graferne 
+hele KU; er f.eks. kun HUM valgt, viser graferne udelukkende udviklingen for HUM. 
 """
     )
 

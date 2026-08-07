@@ -546,9 +546,10 @@ i perioden, indgår ikke i tallet, uanset ansættelsesforhold.
 
 Fordelingen af KU's forfattere på tværs af stillingsgrupper, fordelt på de valgte
 organisatoriske niveauer (fakultet/institut). Andelen (%) angiver, hvor stor en del af enhedens
-**publicerende forfattere** der tilhører hver stillingsgruppe, f.eks. at professorer kan udgøre
-40% af SUND's forfattere. 
+**publicerende forfattere** der tilhører hver stillingsgruppe.
 
+**Eksempel**: er 40 % af SUND's forfattere professorer, betyder det, at professorer udgør 40 % af de personer, 
+der har publiveret fra SUND i perioden - ikke 40 % af SUND's samlede stab. 
 """)
 
     _stil_forf_totals = _query_stil_totals(filters, _stil_mode, count_col="ext_id")
@@ -573,14 +574,15 @@ organisatoriske niveauer (fakultet/institut). Andelen (%) angiver, hvor stor en 
 #### Publikationer pr. stillingsgruppe
 
 I modsætning til sektionen ovenfor tæller denne **publikationer**, ikke personer:
-en publikation med forfattere fra flere stillingsgrupper (fx en professor og en
+en publikation med forfattere fra flere stillingsgrupper (f.eks. en professor og en
 ph.d.-studerende som medforfattere) tælles med i hver af de involverede grupper -
 samme princip som resten af appens organisatoriske nedbrydninger.
 
 Andelen (%) angiver defor, hvor stor en del af enhedens publikationer der har **mindst én** forfatter
-fra den pågældende stillingsgruppe, f.eks. at professorer er med på 40% af alle publikationer. 
-Det betyder ikke, at professorer har skrevet de 40% alene; en publikation kan tælle med under flere
-stillingsgrupper på én gang. 
+fra den pågældende stillingsgruppe.
+
+**Eksempel**: er professorer med på 40 % af alle publikationer, betyder det ikke, at professorer har skrevet de 40 % 
+alene - en publikation kan tælle med under flere stillingsgrupper på én gang. 
 """)
 
     _stil_pub_totals = _query_stil_totals(filters, _stil_mode, count_col="PURE_ID")
@@ -605,8 +607,10 @@ stillingsgrupper på én gang.
 #### Korresponderende forfatterskaber pr. stillingsgruppe
 
 **Metrikken her er forfatterskaber, ikke forfattere eller publikationer**: hver optælling er
-én persons rolle på én bestemt publikation. Hvis én person har bidraget til tre publikationer, 
-tæller vedkommende med ét forfatterskab per publikation, så tre forfatterskaber. 
+én persons rolle på én bestemt publikation. 
+
+**Eksempel**: har én person bidraget til pre publikationer, tæller vedkommende med ét forfatterskab per publikation -
+altså, tre forfatterskaber i alt, ikke én. 
 
 Andelen af forfatterskaber, hvor personen er registreret som korresponderende forfatter,
 er en indikator for forskningsledelse, ikke kun medforfatterskab. Brydes ned på de
