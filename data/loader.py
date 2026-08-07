@@ -58,6 +58,18 @@ def _get_db_for_source(data_source: str):
     conn.execute(f"CREATE VIEW pubs AS SELECT * FROM read_parquet('{PARQUET_PATHS[data_source]}')")
     return conn
 
+@st.cache_resource
+def _get_pairs_db():
+    """Selvstændig DuckDB-forbindelse til forfatterpar-tabellen
+    (KU_pub_pairs_long.parquet) - adskilt fra de tre 'pubs'-datakilder,
+    da par-tabellen er et supplement, ikke et alternativ til dem."""
+    conn = duckdb.connect()
+    conn.execute(f"CREATE VIEW pairs AS SELECT * FROM read_parquet('{REFERENCE_TABLE_PATHS['ku_pairs']}')")
+    return conn
+
+def get_pairs_cursor():
+    return _get_pairs_db().cursor()
+
 def set_active_data_source(data_source: str) -> None:
     st.session_state["_active_data_source"] = data_source
 

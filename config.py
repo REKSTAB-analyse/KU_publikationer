@@ -18,6 +18,7 @@ if ERDA_ENABLED:
     REFERENCE_TABLE_PATHS = {
         "scival_topics": str(_DATA_CACHE_DIR / "SciVal_topics_reference.parquet"),
         "scival_asjc":   str(_DATA_CACHE_DIR / "SciVal_ASJC_reference.parquet"),
+        "ku_pairs":      str(_DATA_CACHE_DIR / "KU_pub_pairs_long.parquet"),
     }
 else:
     # Lokal udvikling: læs direkte fra dine egne, allerede byggede filer
@@ -29,7 +30,9 @@ else:
     REFERENCE_TABLE_PATHS = {
         "scival_topics": r"H:\Publikationsapp\Data\SciVal_topics_reference.parquet",
         "scival_asjc":   r"H:\Publikationsapp\Data\SciVal_ASJC_reference.parquet",
+        "ku_pairs":      r"H:\Publikationsapp\Data\KU_pub_pairs_long.parquet",
     }
+
 
 
 

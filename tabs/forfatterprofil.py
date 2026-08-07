@@ -550,6 +550,11 @@ organisatoriske niveauer (fakultet/institut). Andelen (%) angiver, hvor stor en 
 
 **Eksempel**: er 40 % af SUND's forfattere professorer, betyder det, at professorer udgør 40 % af de personer, 
 der har publiveret fra SUND i perioden - ikke 40 % af SUND's samlede stab. 
+
+**Bemærk ved flerårlige perioder**: en person, der har skiftet stillingsgruppe i den valgte periode, tælles med under
+**begge** grupper - andelene summerer defor ikke nødvendigvis til 100 %. Hver enkelt andel er stadig et gyldigt 
+udtryk for, hvor stor en del af de publicerende forfattere, der har haft den pågældende stillingsgruppe i perioden. 
+Med et enkelt år valgt vil andele altid summere til 100%. 
 """)
 
     _stil_forf_totals = _query_stil_totals(filters, _stil_mode, count_col="ext_id")
