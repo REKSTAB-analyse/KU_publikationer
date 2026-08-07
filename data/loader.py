@@ -125,6 +125,10 @@ def load_logo() -> bytes:
 def logo_base64() -> str:
     return base64.b64encode(load_logo()).decode()
 
+_DANSKE_MAANEDER = [
+    "januar", "februar", "marts", "april", "maj", "juni",
+    "juli", "august", "september", "oktober", "november", "december",
+]
 
 def _get_last_deploy_date() -> str:
     try:
@@ -135,10 +139,10 @@ def _get_last_deploy_date() -> str:
             stderr=subprocess.DEVNULL,
         ).decode().strip()
         dt = datetime.fromisoformat(ts)
-        return f"{dt.day}. {dt.strftime('%B').lower()} {dt.year}"
+        return f"{dt.day}. {_DANSKE_MAANEDER[dt.month - 1]} {dt.year}"
     except Exception:
         d = datetime.today()
-        return f"{d.day}. {d.strftime('%B').lower()} {d.year}"
+        return f"{d.day}. {_DANSKE_MAANEDER[d.month - 1]} {d.year}"
 
 _DEPLOY_DATE = _get_last_deploy_date()
 
