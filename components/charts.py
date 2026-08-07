@@ -138,7 +138,7 @@ def fig_hbar_stacked(
     else:
         y_pos      = y_labels
         height     = max(160, len(y_labels) * 40 + 80)
-        bar_width  = 0.75
+        bar_width  = max(0.75, min(0.9, 1.0 - 0.03 * len(y_labels)))
         yaxis_kwargs = dict(autorange="reversed")
 
     fig = go.Figure()
