@@ -97,7 +97,15 @@ Hold musen over hver boks for at se de præcise tal.
     _dims = hier_cols(_mode)
     _org_rows = load_org_volume(filters, _mode)
     if _org_rows:
-        fig = fig_org_treemap(_org_rows, _dims, build_faculty_colors(), stillingsgruppe_colors(), height=500)
+        _any_unit_selected = (
+            filters.get("fakultet_explicit", False)
+            or filters.get("institutter_explicit", False)
+            or filters.get("stillingsgrupper_explicit", False)
+        )
+        fig = fig_org_treemap(
+            _org_rows, _dims, build_faculty_colors(), stillingsgruppe_colors(),
+            height=500, show_pct=not _any_unit_selected,
+        )
         if fig is not None:
             st.plotly_chart(fig, width="stretch", config=PLOTLY_CONFIG)
 

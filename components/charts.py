@@ -246,7 +246,7 @@ def _nest_org_rows(rows: list, dims: list) -> dict:
         result[key] = {"total": total, "fak": fak, "children": children}
     return result
 
-def fig_org_treemap(rows: list, dims: list, faculty_colors: dict, stillingsgruppe_colors: dict = None, height: int = 500) -> go.Figure:
+def fig_org_treemap(rows: list, dims: list, faculty_colors: dict, stillingsgruppe_colors: dict = None, height: int = 500, show_pct: bool = True) -> go.Figure:
     """
     Plotly-native treemap med samme KU-gradueret farvestil som
     fig_org_treemap_mpl - men med bevaret hover/klik-interaktivitet.
@@ -291,12 +291,15 @@ def fig_org_treemap(rows: list, dims: list, faculty_colors: dict, stillingsgrupp
         values.append(total)
         colors.append(color)
 
-        pct = total / grand_total * 100
         lines = []
         for i, (dim_col, val) in enumerate(zip(dims, path)):
             label = _ORG_DIM_LABELS.get(dim_col, dim_col)
             lines.append(f"<b>{label}: {val}</b>" if i == len(path) - 1 else f"{label}: {val}")
-        lines.append(f"{total:,} publikationer ({pct:.1f}%)")
+        if show_pct:
+            pct = total / grand_total * 100
+            lines.append(f"{total:,} publikationer ({pct:.1f}%)")
+        else:
+            lines.append(f"{total:,} publikationer")
         hovertexts.append("<br>".join(lines))
 
     fig = go.Figure(go.Treemap(
@@ -305,7 +308,7 @@ def fig_org_treemap(rows: list, dims: list, faculty_colors: dict, stillingsgrupp
         branchvalues="total",
         tiling=dict(packing="squarify"),
         pathbar=dict(visible=False),
-        texttemplate="%{label}<br>%{value:,} (%{percentRoot})",
+        texttemplate="%{label}<br>%{value:,} (%{percentRoot})" if show_pct else "%{label}<br>%{value:,}",
         textfont=dict(size=15, color="white"),
         hovertext=hovertexts,
         hovertemplate="%{hovertext}<extra></extra>",
