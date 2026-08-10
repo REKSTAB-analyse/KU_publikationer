@@ -31,7 +31,7 @@ publikationstype eller tilføje en diversitetsdimension.
 
             #year_min = 2000
             year_min = 2021
-            year_max = 2026 #max(opts["year"])
+            year_max = 2025 #max(opts["year"])
             aar_range = st.slider(
                 "Vælg udgivelsesår",
                 min_value=year_min,
