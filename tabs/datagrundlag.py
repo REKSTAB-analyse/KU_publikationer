@@ -146,6 +146,7 @@ def _render_venn(counts: dict):
 
     r_a = scale * math.sqrt(area_a) if area_a > 0 else 0.01
     r_b = scale * math.sqrt(area_b) if area_b > 0 else 0.01
+    #d = _solve_circle_distance(r_a, r_b, both * scale**2 * math.pi)
     d = _solve_circle_distance(r_a, r_b, both * scale**2)
 
     center_a, center_b = 0.0, d
@@ -196,36 +197,58 @@ def render(filters):
 """
 ### Datagrundlag 
 
+I modsætning til appens øvrige faner handler denne ikke om at analysere KU's publikationer, 
+men derimod om selve **grundlaget**, de øvrige analyser hviler på: hvor kommer data fra, 
+hvordan hænger datakilderne sammen, og hvor godt dækker de hinanden?
+
+**CURIS** er KU's egen registrering af publikationer - alt starter her, uafhængigt af DOI
+eller ekstern matchning. **OpenAlex** og **SciVal/Scopus** er begge **eksterne** kilder, 
+som appen beriger med CURIS-data ved at slå CURIS' DOI'er op i hver database - de kan 
+derfor per konstruktion aldrig indeholde mere, end CURIS allerede har. **HR-data** kobles
+separat på for at give hver forfatter en organisationel tilknytning (fakultet/institut/
+stillingsgruppe) - se afsnittet nedenfor for metode og begræsninger. 
 
 
 ---
 
 #### HR-kobling
 
-HR-data er hentet fra Personalesammensætning på Tableauserveren. 
+Hver forfatters fakultet, institut og stillingsgruppe kommer ikke fra CURIS selv, men 
+kobles separat fra KU's personaledata (hentet fra Personalesammensætning på Tableauserveren).
+Koblingen sker **år for år**: for en given publikation slås forfatterens organisatoriske tilknytning
+op, som den var registreret **31. december** i udgivelsesåret - ikke på selve
+udgivelsesdatoen, da data herfor mangler. 
+
+**To praktiske konsekvenser af denne metode**:
+
+- **Jobskifte midt i et år fanges ikke**. Skiftede en forfatter fakultet i løbet af 
+udgivelsesåret, er det kun tilknytningen pr. 31. december, der indgår - uanset hvornår på året 
+publikationen faktisk udkom. 
+- **Indeværende år har endnu ingen HR-data**. Et års data kan først indhentes, efter 31. 
+decemver samme år er passeret. 
 
 ---
 
 #### Datakilder 
 
-For nu er publikationerne fra SciVal og OpenAlex betinget af CURIS' dækningsgrad. En metode til
-at sætte SciVal og OpenAlex fri fra CURIS er under udarbejdelse.
+Hvor godt dækker OpenAlex og SciVal reelt CURIS' publikationer - og hvor meget overlapper de
+to kilder hinanden? De følgende tre afsnit besvarer de spørgsmål. 
+
+En metode til at gøre OpenAlex og SciVal uafhængige af CURIS' dækningsgrad er under
+udarbejdelse - lykkes det, vil disse datakilder på sigt kunne vise flere publikationer 
+end CURIS selv har registreret. 
 """)
 
     st.markdown(
 """
----
-
-#### OpenAlex-dækning
+##### OpenAlex-dækning
 
 Sektionen viser, hvor stor en andel af CURIS's publikationer der har kunnet matches 
-med en tilsvarende OpenAlex-post via DOI. Bemærk: fordi OpenAlexdatasættet er bygget 
-ved at slå CURIS' egne DOI'er op i OpenAlex, kan OpenAlex per kontruktion aldrig kan
-indeholde  publikationer, CURIS ikke allerede har. 
+med en tilsvarende OpenAlex-post via DOI. OpenAlex kan - som nævnt ovenfor - pr. 
+konstruktion aldrig indeholde publikationer, CURIS ikke allerede har. 
 
-Fordelingen dækker hele den tilgængelige periode uafhængigt af sidepanelets øvrige
-filtre, ud over årsintervallet - da formålet er at vurdere selve datagrundagets dækning, 
-ikke en bestemt delmængde af publikationer. 
+Grafen nedenfor respekterer sidepanelets valgte årsinterval, men ignorerer alle ævrige filtre 
+(fakultet/institu/stillingsgruppe/etc.). 
 """)
 
     openalex_coverage = _query_source_coverage("OpenAlex", filters['aar_fra'], filters['aar_til'])
@@ -239,9 +262,7 @@ ikke en bestemt delmængde af publikationer.
 
     st.markdown(
 """
----
-
-#### SciVal-dækning
+##### SciVal-dækning
 
 Samme opgørelse som ovenfor, men for SciVal - hvor stor en andel af CURIS' publikationer
 der har kunnet matches til en post i Scopus/SciVal via DOI. Samme forbehold gælder: SciVal
@@ -260,9 +281,7 @@ kan pr. konstruktion aldrig indeholde publikationer, CURIS ikke allerede har.
 
     st.markdown(
 """
----
-
-#### Overlap mellem OpenAlex og SciVal
+##### Overlap mellem OpenAlex og SciVal
 
 I modsætning til sammenligningen med CURIS ovenfor er dette Venn-diagram reelt meningsfuldt:
 OpenAlex og SciVal er uafhængigt bygget ved at slå CURIS' DOI-liste op i hver deres eksterne
@@ -275,3 +294,4 @@ skrevne tal gør.
     overlap = _query_openalex_scival_overlap(filters['aar_fra'], filters['aar_til'])
     fig_venn = _render_venn(overlap)
     st.plotly_chart(fig_venn, width="stretch", config=PLOTLY_CONFIG)
+
