@@ -69,7 +69,8 @@ def _query_intra_inter_trend(filters, metric, niveau):
             ORDER BY 1
         """
 
-    rows = get_pairs_cursor().execute(sql, params).fetchall()
+    data_source = filters.get("data_source", "CURIS")
+    rows = get_pairs_cursor(data_source).execute(sql, params).fetchall()
     result = {}
     for year, klasse, n in rows:
         result.setdefault(year, {})[klasse] = n
@@ -90,13 +91,13 @@ def _current_scope_label(filters):
     return "KU samlet"
 
 @st.cache_data
-def _institut_to_fak_lookup():
+def _institut_to_fak_lookup(data_source: str):
     """Majoritetsbaseret Institut -> Fakultet-opslag, udledt direkte af
     par-tabellen selv. Bruges til at farve HVERT institut med dets eget
     moderfakultets farve, uafhængigt af hvor mange/hvilke fakulteter der er
     valgt i sidepanelet - i modsætning til den tidligere logik, som kun
     virkede korrekt, når præcis ét fakultet var eksplicit valgt."""
-    rows = get_pairs_cursor().execute("""
+    rows = get_pairs_cursor(data_source).execute("""
         WITH all_insts AS (
             SELECT Inst_1 AS inst, Fak_1 AS fak FROM pairs WHERE Inst_1 != ''
             UNION ALL
@@ -185,7 +186,7 @@ def _render_intra_inter_by_unit(filters, metric, niveau):
                 colors[u] = faculty_colors[u]
         inst_units = [u for u in units if u not in colors]
         if inst_units:
-            inst_to_fak = _institut_to_fak_lookup()
+            inst_to_fak = _institut_to_fak_lookup(filters.get("data_source", "CURIS"))
             by_fak = {}
             for u in inst_units:
                 by_fak.setdefault(inst_to_fak.get(u, ""), []).append(u)
@@ -208,7 +209,7 @@ def _render_intra_inter_by_unit(filters, metric, niveau):
                 colors[u] = faculty_colors[u]
         inst_units = [u for u in units if u not in colors]
         if inst_units:
-            inst_to_fak = _institut_to_fak_lookup()
+            inst_to_fak = _institut_to_fak_lookup(filters.get("data_source", "CURIS"))
             by_fak = {}
             for u in inst_units:
                 by_fak.setdefault(inst_to_fak.get(u, ""), []).append(u)
@@ -330,11 +331,13 @@ organisatoriske enheder skriver sammen, og hvor meget samarbejdet foregår inter
 enhed versus på tværs. Kun **interne** medforfattere indgår; eksternt samarbejde med
 ikke-KU-parter dækkes i stedet af fanen **Eksternt samarbejde**.
 
-
 **Bemærk:** kun publikationer med **mindst to** interne (KU-)forfattere kan indgå i en
 sampubliceringsanalyse. Solo-forfattede publikationer, og publikationer med kun én intern
 forfatter, indgår derfor ikke noget sted i denne fane - "Publikationer" her er dermed et
 snævrere grundlag end fx Oversigt-fanens publikationstal.
+
+Vælges OpenAlex eller SciVal som datakilde i sidepanelet, indgår kun de publikationer, der
+er fundet i den pågældende datakilde - samme afgrænsning som resten af appens faner.
 """ 
     )
 

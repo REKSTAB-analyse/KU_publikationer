@@ -18,7 +18,6 @@ if ERDA_ENABLED:
     REFERENCE_TABLE_PATHS = {
         "scival_topics": str(_DATA_CACHE_DIR / "SciVal_topics_reference.parquet"),
         "scival_asjc":   str(_DATA_CACHE_DIR / "SciVal_ASJC_reference.parquet"),
-        "ku_pairs":      str(_DATA_CACHE_DIR / "KU_pub_pairs_long.parquet"),
     }
 else:
     # Lokal udvikling: læs direkte fra dine egne, allerede byggede filer
@@ -31,6 +30,19 @@ else:
         "scival_topics": r"H:\Publikationsapp\Data\SciVal_topics_reference.parquet",
         "scival_asjc":   r"H:\Publikationsapp\Data\SciVal_ASJC_reference.parquet",
         "ku_pairs":      r"H:\Publikationsapp\Data\KU_pub_pairs_long.parquet",
+    }
+
+if ERDA_ENABLED:
+    PAIRS_PARQUET_PATHS = {
+        "CURIS":    str(_DATA_CACHE_DIR / "KU_pub_pairs_long.parquet"),
+        "OpenAlex": str(_DATA_CACHE_DIR / "KU_pub_pairs_long_OpenAlex.parquet"),
+        "SciVal":   str(_DATA_CACHE_DIR / "KU_pub_pairs_long_SciVal.parquet"),
+    }
+else:
+    PAIRS_PARQUET_PATHS = {
+        "CURIS":    r"H:\Publikationsapp\Data\KU_pub_pairs_long.parquet",
+        "OpenAlex": r"H:\Publikationsapp\Data\KU_pub_pairs_long_OpenAlex.parquet",
+        "SciVal":   r"H:\Publikationsapp\Data\KU_pub_pairs_long_SciVal.parquet",
     }
 
 
