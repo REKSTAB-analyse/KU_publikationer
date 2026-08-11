@@ -915,20 +915,47 @@ def render(filters):
 Fanen kortlægger KU's faglige profil på baggrund af publikationernes emneområder. Klassifikationen
 afhænger af den valgte datakilde i sidepanelet: OpenAlex og SciVal tilbyder begge et hierarki
 (fra brede domæner til specifikke emner), men CURIS' egen klassifikation ('Hovedområde') er langt
-grovere - kun fem kategorier, inden underinddeling - men til gengæld dækker den alle publikationer, 
-uafhængigt af DOI-matchning. Metoden bag selve CURIS-emnetildelingen er endnu ikke afklaret 
-(XXX spørg Svend).
-
+grovere - kun fire kategorier, inden underinddeling - men til gengæld dækker den alle publikationer, 
+uafhængigt af DOI-matchning.
 """)
 
     data_source = filters.get("data_source", "CURIS")
 
     if data_source == "CURIS":
         
+        with st.expander("Sådan klassificerer CURIS hovedområder"):
+            st.markdown(
+"""
+CURIS' fire hovedområder blev fastlagt, da CURIS blev sat op: hvert fakultet fik dengang 
+tildelt **ét** af de fire områder - og alle underliggende enheder arvede det samme 
+hovedområde. 
+
+De fire hovedområder er: 
+
+- Humanities (HUM og TEO)
+- Social sciences (SAMF og JUR)
+- Health sciences (SUND)
+- Technical/neutral sciences (SCIENCE)
+
+**En metodisk svaghed, som er værd at bemærke, inden tallene bruges**: en publikation
+tildeles sit hovedområde ud fra **førsteforfatterens** organisatoriske tilknytning - ikke 
+ud fra publikationens faktiske emne, og ikke ud fra en samlet vurdering af alle medforfattere.
+
+**Eksempel**: skriver en kemiker ('Tecnical/natural sciences') en artikel sammen med to 
+forfattere fra Biomedicinsk Institut ('Health sciences'), bliver hele publikationen 
+tildelt **'Technical/natural sciences'**, selvom det faglige indhold måske ligger tættere 
+på 'Health sciences' - udelukkende fordi kemikeren er førsteforfatter. Havde forfatterrækkefølgen
+væres anderledes, ville samme publikation være blevet tildelt 'Health sciences' i stedet.
+
+Denne begrænsning gælder **alle** tværfaglige publikationer - og bør derfor snarere læses som
+*hvilket område førsteforfatteren organisatorisk hører under*, ikke som en pålidelig
+indikator for selve forskningsemnet. 
+"""
+            )
+
+
         st.markdown(
 """
-Nedenfor ses CURIS' indeling af publikationer i hovedområder. 
-
 ##### Hovedområder 
 
 Fordelingen er opgjort på tværs af de valgte organisatoriske niveauer. Da hver publikation
