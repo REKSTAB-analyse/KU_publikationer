@@ -4,7 +4,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import streamlit as st
 from config import FAC_ORDER, STILLINGSGRUPPER, doi_filter_sql
-from data.loader import load_sprog_options, load_filter_options, load_max_author_count, load_institut_options
+from data.loader import load_sprog_options, load_filter_options, load_max_author_count, load_institut_options, load_statsborgerskab_options
 
 def render_sidepanel() -> dict:
     """ Viser sdepanel og returnerer aktive filtre som dict"""
@@ -95,11 +95,41 @@ publikationstype eller tilføje en diversitetsdimension.
                 filters["stillingsgrupper_explicit"] = False
 
         with st.expander("**Diversitet**"):
-            valgte_køn = st.multiselect(
-                "Køn (tom=begge)",
-                options=["Kvinder", "Mænd"], default=[], key="sp_køn"
+            show_koen = st.checkbox(
+                "**Køn**",
+                key="cb_koen", value=False,
             )
-            filters["køn"] = valgte_køn or ["Kvinder", "Mænd"]
+            show_statsbg = st.checkbox(
+                "**Statsborgerskab**",
+                key="cb_statsbg", value=False,
+            )
+
+            filters["vis_koen"] = show_koen
+            filters["vis_statsborgerskab"] = show_statsbg
+
+            if show_koen:
+                valgte_koen = st.multiselect(
+                    "Vælg køn (tom = alle)",
+                    options=["Kvinder", "Mænd"], default=[], key="sp_koen",
+                )
+                filters["køn"] = valgte_koen or ["Kvinder", "Mænd"]
+                filters["køn_explicit"] = bool(valgte_koen)
+            else:
+                filters["køn"] = ["Kvinder", "Mænd"]
+                filters["køn_explicit"] = False
+
+            if show_statsbg:
+                statsbg_opts = load_statsborgerskab_options(data_source)
+                valgte_statsbg = st.multiselect(
+                    "Vælg statsborgerskab (tom = alle)",
+                    options=statsbg_opts, default=[], key="sp_statsborgerskab",
+                )
+                filters["statsborgerskab"] = valgte_statsbg or statsbg_opts
+                filters["statsborgerskab_explicit"] = bool(valgte_statsbg)
+            else:
+                statsbg_opts = load_statsborgerskab_options(data_source)
+                filters["statsborgerskab"] = statsbg_opts
+                filters["statsborgerskab_explicit"] = False
         
         with st.expander("**Publikationstype og adgang**"):
             st.caption(

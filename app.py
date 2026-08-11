@@ -17,6 +17,7 @@ import tabs.eksternt as tab_eksternt
 import tabs.sampublicering as tab_sampublicering
 import tabs.datagrundlag as tab_datagrundlag
 import tabs.forfatterprofil as tab_forfatterprofil
+from tabs import diversitet as tab_diversitet
 
 def main():
     # --- Page config ---
@@ -116,7 +117,10 @@ Hold musen over hver boks for at se de præcise tal.
     # --- Faner ---
     #tab_labels = [t for t in TABS
                   #if t != "Forfatterprofil" or "G" in filters.get("mode", "")]
-    tab_labels = TABS
+    tab_labels = [
+        t for t in TABS
+        if t != "Diversitet" or filters.get("vis_koen") or filters.get("vis_statsborgerskab")
+    ]
     tabs = st.tabs(tab_labels)
     tabs_dict = dict(zip(tab_labels, tabs))
 
@@ -143,6 +147,10 @@ Hold musen over hver boks for at se de præcise tal.
     
     with tabs_dict["Forfatterprofil"]:
         tab_forfatterprofil.render(filters)
+    
+    if "Diversitet" in tabs_dict:
+        with tabs_dict["Diversitet"]:
+            tab_diversitet.render(filters)
     
     # Footer
     st.markdown(f"""

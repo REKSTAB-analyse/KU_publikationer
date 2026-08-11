@@ -177,6 +177,7 @@ TABS = [
     "Oversigt",
     "Publikationsformer",
     "Forfatterprofil",
+    "Diversitet",
     "Forskningsprofil",
     "Citationsimpact",
     "Eksternt samarbejde",
