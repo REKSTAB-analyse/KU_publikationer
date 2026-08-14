@@ -257,7 +257,7 @@ def _render_intra_inter_by_unit(filters, metric, niveau):
             legend=dict(orientation="v", yanchor="top", y=1, xanchor="left", x=1.02),
             margin=dict(t=50, b=10, l=10, r=150), # 220
         )
-        st.plotly_chart(fig, width="stretch", config=PLOTLY_CONFIG)
+        st.plotly_chart(fig, width="stretch", config=PLOTLY_CONFIG, key=f"sampub_chart_{niveau}_{metric}_{chart_mode}")
         render_table_export(
             data={
                 str(year): {
