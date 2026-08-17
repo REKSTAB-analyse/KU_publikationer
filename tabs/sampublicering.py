@@ -58,13 +58,15 @@ def _query_intra_inter_trend(filters, metric, niveau):
         sql = f"""
             WITH pub_class AS (
                 SELECT PURE_ID, Year,
-                       MAX(CASE WHEN {edge_col} = 'inter' THEN 1 ELSE 0 END) AS has_inter
+                       MAX(CASE WHEN {edge_col} = 'inter' THEN 1 ELSE 0 END) AS has_inter,
+                       MAX(CASE WHEN {edge_col} = 'solo' THEN 1 ELSE 0 END) AS is_solo
                 FROM pairs
                 {where_sql}
                 GROUP BY PURE_ID, Year
             )
             SELECT Year, CASE WHEN has_inter = 1 THEN 'inter' ELSE 'intra' END AS klasse, COUNT(*) AS n
             FROM pub_class
+            WHERE is_solo = 0
             GROUP BY 1, 2
             ORDER BY 1
         """
@@ -89,6 +91,233 @@ def _current_scope_label(filters):
         faks = filters['fakultet']
         return faks[0] if len(faks) == 1 else f"{len(faks)} valgte fakulteter"
     return "KU samlet"
+
+def _full_unit_label(unit, niveau, filters):
+    """Sammensat label, der viser den valgte enhed sammen med evt. samtidigt
+    aktive andre niveauer - samme 'X | Y'-mønster konsekvent på tværs af
+    Fakultet, Institut og Stillingsgruppe."""
+    parts = [unit]
+    if niveau == "fak":
+        if filters.get('institutter_explicit', False):
+            insts = filters['institutter']
+            parts.append(insts[0] if len(insts) == 1 else f"{len(insts)} institutter")
+    elif niveau == "inst":
+        if filters.get('fakultet_explicit', False):
+            faks = filters['fakultet']
+            parts.append(faks[0] if len(faks) == 1 else f"{len(faks)} fakulteter")
+    else:  # stil
+        if filters.get('institutter_explicit', False):
+            insts = filters['institutter']
+            parts.append(insts[0] if len(insts) == 1 else f"{len(insts)} institutter")
+        elif filters.get('fakultet_explicit', False):
+            faks = filters['fakultet']
+            parts.append(faks[0] if len(faks) == 1 else f"{len(faks)} fakulteter")
+    return " | ".join(parts)
+
+
+def _stil_shared_fak_inst_color(filters, faculty_colors, data_source):
+    """Fælles farve for ALLE stillingsgruppe-enheder i samme kald, når
+    institut/fakultet er eksplicit valgt samtidig med stillingsgruppe -
+    institut/fakultet-farven har forrang over stillingsgruppens egen."""
+    if filters.get('institutter_explicit', False) and len(filters['institutter']) == 1:
+        inst = filters['institutter'][0]
+        parent_fak = _institut_to_fak_lookup(data_source).get(inst, "")
+        return faculty_colors.get(parent_fak, "#666666")
+    if filters.get('fakultet_explicit', False) and len(filters['fakultet']) == 1:
+        return faculty_colors.get(filters['fakultet'][0], "#666666")
+    return None
+
+def _compute_unit_colors(units, niveau, filters, faculty_colors, data_source):
+    """Delt farvelogik for BÅDE _render_intra_inter_by_unit og
+    _render_internt_samarbejde_by_unit - undgår at vedligeholde flere
+    kopier, der kan komme ud af trit. 'base_name' (før evt. ' | '-sammen-
+    sætning fra _full_unit_label) bruges konsekvent til opslag."""
+    stil_colors = stillingsgruppe_colors()
+    colors = {}
+
+    if niveau == "stil":
+        shared_color = _stil_shared_fak_inst_color(filters, faculty_colors, data_source)
+        if shared_color is not None:
+            for u in units:
+                colors[u] = "#666666" if u == "KU samlet" else shared_color
+            return colors
+
+    for u in units:
+        base_name = u.split(" | ")[0]
+        if u == "KU samlet":
+            colors[u] = "#666666"
+        elif niveau == "stil" and base_name in stil_colors:
+            colors[u] = stil_colors[base_name]
+        elif base_name in faculty_colors:
+            colors[u] = faculty_colors[base_name]
+
+    inst_units = [u for u in units if u not in colors]
+    if inst_units:
+        inst_to_fak = _institut_to_fak_lookup(data_source)
+        by_fak = {}
+        for u in inst_units:
+            base_name = u.split(" | ")[0]
+            by_fak.setdefault(inst_to_fak.get(base_name, ""), []).append(u)
+        for parent_fak, insts in by_fak.items():
+            insts_sorted = sorted(insts)
+            base = faculty_colors.get(parent_fak)
+            if base:
+                shades = _hls_gradient(base, len(insts_sorted))
+                for i, u in enumerate(insts_sorted):
+                    colors[u] = shades[i]
+            else:
+                fallback = ku_color_sequence(len(insts_sorted))
+                for i, u in enumerate(insts_sorted):
+                    colors[u] = fallback[i]
+    return colors
+
+def _samarbejde_base_where(filters):
+    ph = lambda lst: ", ".join(["?" for _ in lst])
+    where_sql = f"""
+        WHERE Year IS NOT NULL
+          AND Type        IN ({ph(filters['typer'])})
+          AND Sprog       IN ({ph(filters['sprog'])})
+          AND Peer_review IN ({ph(filters['peer'])})
+          AND Indholdstype IN ({ph(filters['indholdstyper'])})
+          AND COALESCE(Open_Access, 'Unknown') IN ({ph(filters['open_access'])})
+          AND ({doi_filter_sql(filters['har_doi'])})
+          AND Antal_forfattere BETWEEN ? AND ?
+          AND (
+                (Fak_1 IN ({ph(filters['fakultet'])}) AND Inst_1 IN ({ph(filters['institutter'])}) AND Stil_1 IN ({ph(filters['stillingsgrupper'])}))
+             OR (Fak_2 IN ({ph(filters['fakultet'])}) AND Inst_2 IN ({ph(filters['institutter'])}) AND Stil_2 IN ({ph(filters['stillingsgrupper'])}))
+          )
+    """
+    params = (
+        filters['typer'] + filters['sprog'] + filters['peer'] +
+        filters['indholdstyper'] + filters['open_access'] +
+        [filters['min_forfattere'], filters['max_forfattere']] +
+        filters['fakultet'] + filters['institutter'] + filters['stillingsgrupper'] +
+        filters['fakultet'] + filters['institutter'] + filters['stillingsgrupper']
+    )
+    return where_sql, params
+
+
+@st.cache_data
+def _query_internt_samarbejde_by_unit(filters):
+    candidates = [
+        (filters.get('stillingsgrupper_explicit', False), "stillingsgrupper"),
+        (filters.get('institutter_explicit', False), "institutter"),
+        (filters.get('fakultet_explicit', False), "fakultet"),
+    ]
+    units, filter_key = None, None
+    for is_active, key in candidates:
+        if is_active:
+            units, filter_key = filters[key], key
+            break
+
+    data_source = filters.get("data_source", "CURIS")
+
+    def _counts(f):
+        where_sql, params = _samarbejde_base_where(f)
+        sql = f"""
+            WITH pub_flags AS (
+                SELECT PURE_ID, Year,
+                       MAX(CASE WHEN Edge_type_inst = 'solo' THEN 1 ELSE 0 END) AS is_solo
+                FROM pairs
+                {where_sql}
+                GROUP BY PURE_ID, Year
+            )
+            SELECT Year, COUNT(*) AS total,
+                   SUM(CASE WHEN is_solo = 0 THEN 1 ELSE 0 END) AS internt_n,
+                   SUM(is_solo) AS solo_n
+            FROM pub_flags
+            GROUP BY Year
+            ORDER BY Year
+        """
+        return get_pairs_cursor(data_source).execute(sql, params).fetchall()
+
+    if units is None:
+        rows = _counts(filters)
+        result = {}
+        for year, total, internt_n, solo_n in rows:
+            result.setdefault(year, {})[_current_scope_label(filters)] = {"total": total, "internt": internt_n, "solo": solo_n}
+        return result, "fak"
+
+    _filter_key_to_niveau = {"stillingsgrupper": "stil", "institutter": "inst", "fakultet": "fak"}
+    niveau_for_label = _filter_key_to_niveau[filter_key]
+
+    result = {}
+    for unit in units:
+        unit_filters = dict(filters)
+        unit_filters[filter_key] = [unit]
+        rows = _counts(unit_filters)
+        display_label = _full_unit_label(unit, niveau_for_label, filters)
+        for year, total, internt_n, solo_n in rows:
+            result.setdefault(year, {})[display_label] = {"total": total, "internt": internt_n, "solo": solo_n}
+    return result, niveau_for_label
+
+def _render_internt_samarbejde_by_unit(filters):
+    """Solid = Internt samarbejde, stiplet = Solo, farve = enhed - samme
+    visuelle sprog som _render_intra_inter_by_unit."""
+    data, niveau_for_label = _query_internt_samarbejde_by_unit(filters)
+    if not data:
+        st.error("Ingen data matcher de valgte filtre.")
+        return
+
+    years_sorted = sorted(data.keys())
+    units = sorted({u for cats in data.values() for u in cats}, key=lambda u: (u != "KU samlet", u))
+
+    faculty_colors = build_faculty_colors()
+    colors = _compute_unit_colors(units, niveau_for_label, filters, faculty_colors, filters.get("data_source", "CURIS"))
+
+    def _build_and_render(chart_mode):
+        fig = go.Figure()
+        for unit in units:
+            for klasse, dash in [("internt", None), ("solo", "dash")]:
+                y_vals, pct_vals, hover_n = [], [], []
+                for year in years_sorted:
+                    stats = data.get(year, {}).get(unit, {"total": 0, "internt": 0, "solo": 0})
+                    n = stats.get(klasse, 0) or 0
+                    total = stats.get("total", 0) or 1
+                    pct = round(100 * n / total, 1)
+                    y_vals.append(pct if chart_mode == "pct" else n)
+                    pct_vals.append(pct)
+                    hover_n.append(n)
+                label = "internt samarbejde" if klasse == "internt" else "solo"
+                fig.add_trace(go.Scatter(
+                    x=years_sorted, y=y_vals, mode="lines+markers",
+                    name=f"{unit} ({label})",
+                    line=dict(color=colors.get(unit, "#666666"), dash=dash, width=2.5 if unit == "KU samlet" else 2),
+                    marker=dict(size=5),
+                    customdata=list(zip(pct_vals, hover_n)),
+                    hovertemplate=(
+                        f"<b>{unit} ({label})</b><br>%{{x}}<br>"
+                        f"%{{customdata[0]:.1f}}%<br>%{{customdata[1]:,}} publikationer<extra></extra>"
+                    ),
+                ))
+        fig.update_layout(
+            title=dict(text="Internt samarbejde og solo, pr. enhed", font=dict(size=14)),
+            xaxis=dict(title="Udgivelsesår", dtick=1),
+            yaxis=dict(title="Andel (%)" if chart_mode == "pct" else "Antal", range=[0, 100] if chart_mode == "pct" else None),
+            plot_bgcolor="white", height=460,
+            legend=dict(orientation="v", yanchor="top", y=1, xanchor="left", x=1.02),
+            margin=dict(t=50, b=10, l=10, r=150),
+        )
+        st.plotly_chart(fig, width="stretch", config=PLOTLY_CONFIG, key=f"internt_samarbejde_chart_{chart_mode}")
+        render_table_export(
+            data={
+                str(year): {
+                    f"{u} ({k})": data.get(year, {}).get(u, {}).get(k, 0)
+                    for u in units for k in ["internt", "solo"]
+                }
+                for year in years_sorted
+            },
+            row_label="År",
+            filename=f"sampub_internt_samarbejde_pr_enhed_{chart_mode}.xlsx",
+            sheet_name="Internt samarbejde pr. enhed",
+            key=f"export_internt_samarbejde_pr_enhed_{chart_mode}",
+        )
+
+    _tab_antal, _tab_pct = st.tabs(["Antal", "Andel (%)"])
+    with _tab_antal:
+        _build_and_render("antal")
+    with _tab_pct:
+        _build_and_render("pct")
 
 @st.cache_data
 def _institut_to_fak_lookup(data_source: str):
@@ -153,11 +382,57 @@ def _query_intra_inter_by_unit(filters, metric, niveau):
         unit_filters = dict(filters)
         unit_filters[filter_key] = [unit]
         data = _query_intra_inter_trend(unit_filters, metric, niveau)
+        display_label = _full_unit_label(unit, niveau, filters)
         for year, cats in data.items():
-            result.setdefault(year, {})[unit] = cats
+            result.setdefault(year, {})[display_label] = cats
     return result
 
-def _render_intra_inter_by_unit(filters, metric, niveau):
+@st.cache_data
+def _query_alle_pub_by_unit(filters, niveau):
+    """Samlet antal ALLE publikationer (inkl. solo) år for år, PR.
+    ORGANISATORISK ENHED - matcher samme enheds-fallback-kæde som
+    _query_intra_inter_by_unit. Bruges UDELUKKENDE som alternativ nævner
+    til Andel (%), når 'alle publikationer'-toggle'en er slået til - ændrer
+    intet ved selve linjerne (intra/inter), kun hvad de sammenlignes med."""
+    if niveau == "fak":
+        candidates = [(filters.get('fakultet_explicit', False), "fakultet")]
+    elif niveau == "inst":
+        candidates = [(filters.get('institutter_explicit', False), "institutter"), (filters.get('fakultet_explicit', False), "fakultet")]
+    else:  # stil
+        candidates = [
+            (filters.get('stillingsgrupper_explicit', False), "stillingsgrupper"),
+            (filters.get('institutter_explicit', False), "institutter"),
+            (filters.get('fakultet_explicit', False), "fakultet"),
+        ]
+
+    units, filter_key = None, None
+    for is_active, key in candidates:
+        if is_active:
+            units, filter_key = filters[key], key
+            break
+
+    data_source = filters.get("data_source", "CURIS")
+
+    def _count(f):
+        where_sql, params = _samarbejde_base_where(f)
+        sql = f"SELECT Year, COUNT(DISTINCT PURE_ID) AS n FROM pairs {where_sql} GROUP BY Year"
+        return dict(get_pairs_cursor(data_source).execute(sql, params).fetchall())
+
+    if units is None:
+        counts = _count(filters)
+        return {year: {_current_scope_label(filters): n} for year, n in counts.items()}
+
+    result = {}
+    for unit in units:
+        unit_filters = dict(filters)
+        unit_filters[filter_key] = [unit]
+        counts = _count(unit_filters)
+        display_label = _full_unit_label(unit, niveau, filters)
+        for year, n in counts.items():
+            result.setdefault(year, {})[display_label] = n
+    return result
+
+def _render_intra_inter_by_unit(filters, metric, niveau, alle_publikationer=False):
     """
     To linjer pr. enhed (intra=stiplet, inter=optrukket) - farven
     identificerer enheden. Enheds-aksen falder tilbage til det næst-mest
@@ -165,6 +440,7 @@ def _render_intra_inter_by_unit(filters, metric, niveau):
     eksplicit valgt.
     """
     data = _query_intra_inter_by_unit(filters, metric, niveau)
+    alle_pub_totals = _query_alle_pub_by_unit(filters, niveau) if alle_publikationer else None
     if not data:
         st.error("Ingen data matcher de valgte filtre.")
         return
@@ -175,55 +451,8 @@ def _render_intra_inter_by_unit(filters, metric, niveau):
     faculty_colors = build_faculty_colors()
     colors = {}
 
-    if niveau == "stil":
-        stil_colors = stillingsgruppe_colors()
-        for u in units:
-            if u == "KU samlet":
-                colors[u] = "#666666"
-            elif u in stil_colors:
-                colors[u] = stil_colors[u]
-            elif u in faculty_colors:
-                colors[u] = faculty_colors[u]
-        inst_units = [u for u in units if u not in colors]
-        if inst_units:
-            inst_to_fak = _institut_to_fak_lookup(filters.get("data_source", "CURIS"))
-            by_fak = {}
-            for u in inst_units:
-                by_fak.setdefault(inst_to_fak.get(u, ""), []).append(u)
-            for parent_fak, insts in by_fak.items():
-                insts_sorted = sorted(insts)
-                base = faculty_colors.get(parent_fak)
-                if base:
-                    shades = _hls_gradient(base, len(insts_sorted))
-                    for i, u in enumerate(insts_sorted):
-                        colors[u] = shades[i]
-                else:
-                    fallback = ku_color_sequence(len(insts_sorted))
-                    for i, u in enumerate(insts_sorted):
-                        colors[u] = fallback[i]
-    else:
-        for u in units:
-            if u == "KU samlet":
-                colors[u] = "#666666"
-            elif u in faculty_colors:
-                colors[u] = faculty_colors[u]
-        inst_units = [u for u in units if u not in colors]
-        if inst_units:
-            inst_to_fak = _institut_to_fak_lookup(filters.get("data_source", "CURIS"))
-            by_fak = {}
-            for u in inst_units:
-                by_fak.setdefault(inst_to_fak.get(u, ""), []).append(u)
-            for parent_fak, insts in by_fak.items():
-                insts_sorted = sorted(insts)
-                base = faculty_colors.get(parent_fak)
-                if base:
-                    shades = _hls_gradient(base, len(insts_sorted))
-                    for i, u in enumerate(insts_sorted):
-                        colors[u] = shades[i]
-                else:
-                    fallback = ku_color_sequence(len(insts_sorted))
-                    for i, u in enumerate(insts_sorted):
-                        colors[u] = fallback[i]
+    colors = _compute_unit_colors(units, niveau, filters, faculty_colors, filters.get("data_source", "CURIS"))
+    
 
     def _build_and_render(chart_mode):
         fig = go.Figure()
@@ -233,7 +462,10 @@ def _render_intra_inter_by_unit(filters, metric, niveau):
                 for year in years_sorted:
                     cats = data.get(year, {}).get(unit, {})
                     n = cats.get(klasse, 0)
-                    total = sum(cats.values()) or 1
+                    if alle_pub_totals is not None:
+                        total = alle_pub_totals.get(year, {}).get(unit, 0) or 1
+                    else:
+                        total = sum(cats.values()) or 1
                     pct = round(100 * n / total, 1)
                     y_vals.append(pct if chart_mode == "pct" else n)
                     pct_vals.append(pct)
@@ -331,11 +563,6 @@ organisatoriske enheder skriver sammen, og hvor meget samarbejdet foregår inter
 enhed versus på tværs. Kun **interne** medforfattere indgår; eksternt samarbejde med
 ikke-KU-parter dækkes i stedet af fanen **Eksternt samarbejde**.
 
-**Bemærk:** kun publikationer med **mindst to** interne (KU-)forfattere kan indgå i en
-sampubliceringsanalyse. Solo-forfattede publikationer, og publikationer med kun én intern
-forfatter, indgår derfor ikke noget sted i denne fane - "Publikationer" her er dermed et
-snævrere grundlag end fx Oversigt-fanens publikationstal.
-
 Vælges OpenAlex eller SciVal som datakilde i sidepanelet, indgår kun de publikationer, der
 er fundet i den pågældende datakilde - samme afgrænsning som resten af appens faner.
 """ 
@@ -352,7 +579,9 @@ er fundet i den pågældende datakilde - samme afgrænsning som resten af appens
 """
 **Forfatterpar** tæller hver unik kombination af to interne medforfattere på samme
 publikation. En publikation med **n** interne forfattere bidrager med n(n-1)/2 par -
-en artikel med mange forfattere vejer derfor tungere i denne metrik end en med få.
+en artikel med mange forfattere vejer derfor tungere i denne metrik end en med få. 
+Publikationer med kun én intern forfatter bidrager per definition med **0** par, og indgår
+derfor ikke i denne metrik. 
 
 **Eksempel**: en publikation med 5 interne medforfattere fra forskellige institutter
 bidrager med 10 forfatterpar til netværket - langt mere end en 2-forfatter-artikel, selvom
@@ -364,9 +593,10 @@ begge kun er **én** publikation. Forfatterpar er derfor det rette valg, hvis sp
         st.markdown(
 """
 **Publikationer** tæller hver publikation præcis én gang, uanset hvor mange interne
-medforfattere den har. En publikation klassificeres som **på tværs** (inter), hvis den
+medforfattere den har. En publikation klassificeres som **inter**, hvis den
 har **mindst ét** forfatterpar, der krydser den valgte organisatoriske grænse (f.eks. 
-fakultet) - ellers som **internt** (intra).
+fakultet) - ellers som **intra**. Publikationer med kun én intern forfatter kan hverken være intra
+eller intra - se **Internt samarbejde nedenfor** for hvordan de indgår. 
 
 **Eksempel**: en publikation med 5 interne medforfattere, hvoraf blot to kommer fra
 forskellige fakulteter, tæller som **én** tværgående publikation - uanset at de øvrige
@@ -378,6 +608,42 @@ konsortium-artikler vejer tungere end små.
 
     st.markdown("---")
     _metric_arg = "forfatterpar" if _metrik == "Forfatterpar" else "publikationer"
+
+    _alle_pub = False
+    if _metrik == "Publikationer":
+        st.markdown(
+"""
+##### Internt samarbejde
+
+Internt samarbejder dækker over publikationer med mindst to interne forfattere - uanset organisatorisk
+tilknytning. Modstykket er 'solo', som er publikationer med kun én intern forfatter.  
+
+Er specifikke enheder valgt i sidepanelet, vises ét linjepar pr. valgt enhed. 
+
+**Eksempel**: vælges 'SAMF' i sidepanelet, viser linjeparret, hvor stor en andel af SAMF's publikationer
+der har **mindst to** KU-forfattere (uanset om de begge er fra SAMF), versus
+hvor stor en del der har SAMF-forfatteren som eneste interne forfatter. 
+"""
+        )
+        _render_internt_samarbejde_by_unit(filters)
+
+        _alle_pub = st.toggle(
+            "Andel af alle publikationer",
+            value=True, 
+            key="sampub_alle_pub_toggle",
+        )
+        if _alle_pub:
+            st.caption(
+                "Andel (%) i de tre sektioner nedenfor viser nu andelen af **alle** publikationer (inkl. solo) - ikke kun "
+                "andelen af publikationer med internt samarbejde."
+            )
+        else:
+            st.caption(
+                "Andel (%) viser nu kun andelen af publikationer med internt samarbejde."
+            )
+        
+        st.markdown("---")
+
 
     st.markdown(
 """
@@ -394,7 +660,7 @@ fakultetet (stiplet) linje, og hvor meget der går **på tværs** til andre faku
 (optrukket linje).
 """
     )
-    _render_intra_inter_by_unit(filters, _metric_arg, "fak")
+    _render_intra_inter_by_unit(filters, _metric_arg, "fak", alle_publikationer=_alle_pub)
 
 
     st.markdown("---")
@@ -413,7 +679,7 @@ institutter (stiplet linje), og hvor meget der går **på tværs** til andre ins
 uanset om det andet institut hører under samme fakultet (optrukket linje). 
 """
     )
-    _render_intra_inter_by_unit(filters, _metric_arg, "inst")
+    _render_intra_inter_by_unit(filters, _metric_arg, "inst", alle_publikationer=_alle_pub)
 
     st.markdown("---")
     st.markdown(
@@ -440,4 +706,4 @@ Begge eksempler ovenfor kan selvfølgelig kombineres.
 """
         )
 
-    _render_intra_inter_by_unit(filters, _metric_arg, "stil")
+    _render_intra_inter_by_unit(filters, _metric_arg, "stil", alle_publikationer=_alle_pub)
