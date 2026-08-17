@@ -417,15 +417,17 @@ hele KU; er f.eks. kun HUM valgt, viser graferne udelukkende udviklingen for HUM
 
 #### Se mere i de øvrige faner
 
-Denne fane giver det samlede overblik - vil du grave dybere, kan du gå til: 
+Denne fane giver det samlede overblik - vil du grave dybere, kan du gå til:
 
 - **Publikationsformer** - hvordan fordeler outputtet sig på type, sprog, peer review og Open Access?
 - **Forfatterprofil** - hvem står bag publikationerne, fordelt på stillingsgruppe og korresponderende
 forfatterskab?
-- **Forkningsprofil** - hvad handler KU's forsknings om?
+- **Diversitet** - hvordan er KU's publicerende forfattere sammensat på tværs af køn og statsborgerskab?
+- **Forskningsprofil** - hvad handler KU's forskning om?
 - **Citationsimpact** - hvor meget citeres KU's forskning, sammenlignet med resten af verden?
-- **Eksternt samarbejde** - hvilke lande samarbejde KU med, og hvor udbredt er det?
-- **Dagagrundlag** - hvordan hænger datakilderne sammen, og hvor godt dækker de hinanden?
+- **Eksternt samarbejde** - hvilke lande samarbejder KU med, og hvor udbredt er det?
+- **Sampublicering** - hvor meget samarbejder KU's forskere internt, på tværs af enheder?
+- **Datagrundlag** - hvordan hænger datakilderne sammen, og hvor godt dækker de hinanden?
 
 """
     )
