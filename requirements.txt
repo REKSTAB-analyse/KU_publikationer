@@ -7,4 +7,3 @@ plotly
 duckdb
 pycountry
 psutil
-duckdb

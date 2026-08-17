@@ -206,7 +206,7 @@ def fig_hbar_stacked(
         xaxis=dict(
             title="Andel (%)" if mode == "pct" else ("Publikationer pr. forfatter" if mode == "rate" else xaxis_title),
             tickformat="," if mode == "antal" else (".2f" if mode == "rate" else ".0f"),
-            range=[0, 100] if mode == "pct" else None,
+            range=None if mode == "pct" else None,
         ),
         yaxis=dict(**yaxis_kwargs),
         plot_bgcolor="white",
@@ -256,19 +256,24 @@ def fig_org_treemap(rows: list, dims: list, faculty_colors: dict, stillingsgrupp
     if grand_total == 0:
         return None
 
-    def _assign_colors(group_dict, parent_color=None):
+    def _assign_colors(group_dict, parent_color=None, level=0):
         items = sorted(group_dict.items(), key=lambda kv: -kv[1]["total"])
         if parent_color is None:
             if dims[0] == "Stil" and stillingsgruppe_colors:
                 colors = {k: stillingsgruppe_colors.get(k, "#666666") for k, v in items}
             else:
                 colors = {k: faculty_colors.get(v["fak"], "#666666") for k, v in items}
+        elif level < len(dims) and dims[level] == "Stil":
+            # Stillingsgruppe-niveau under et andet niveau (fx institut):
+            # samme farve som moderenheden, ingen nuancering - selve
+            # tekstlabels på fliserne adskiller allerede stillingsgrupperne.
+            colors = {k: parent_color for k, v in items}
         else:
             shades = _hls_gradient(parent_color, len(items))
             colors = {k: shades[i] for i, (k, v) in enumerate(items)}
         for k, v in items:
             if v["children"]:
-                _assign_colors(v["children"], colors[k])
+                _assign_colors(v["children"], colors[k], level=level + 1)
         return colors
 
     top_colors = _assign_colors(nested)
@@ -279,7 +284,7 @@ def fig_org_treemap(rows: list, dims: list, faculty_colors: dict, stillingsgrupp
             sub_path = path + (key,)
             yield sub_path, v["total"], colors[key]
             if v["children"]:
-                child_colors = _assign_colors(v["children"], colors[key])
+                child_colors = _assign_colors(v["children"], colors[key], level=len(sub_path))
                 yield from _flatten(v["children"], sub_path, child_colors)
 
     ids, labels, parents, values, colors, hovertexts = [], [], [], [], [], []
@@ -525,7 +530,7 @@ def fig_year_trend(
         xaxis=dict(title="År", dtick=1),
         yaxis=dict(
             title="Andel (%)" if mode == "pct" else yaxis_title,
-            range=[0,100] if mode == "pct" else None,
+            range= None if mode == "pct" else None,
         ),
         plot_bgcolor="white",
         height=420,

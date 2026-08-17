@@ -207,7 +207,7 @@ def _render_koen_rate(filters, mode, taeller="forfatterskaber", min_celle=4):
         )
     }
     if not rate_data:
-        st.warning(f"Alle enheder er skjult, da mindst ét køn har færre end {min_celle} repræsenterede overalt i det valgte udsnit.")
+        st.error(f"Alle enheder er skjult, da mindst ét køn har færre end {min_celle} repræsenterede overalt i det valgte udsnit.")
         return
 
     y_labels = list(rate_data.keys())
@@ -274,7 +274,7 @@ def _render_koen_section(filters, mode, title_prefix, chart_mode="antal", count_
     if pct_denominators is not None:
         pct_denominators = {u: v for u, v in pct_denominators.items() if u in data}
     if not data:
-        st.warning(f"Alle enheder er skjult, da mindst ét køn har færre end {min_celle} repræsenterede overalt i det valgte udsnit.")
+        st.error(f"Alle enheder er skjult, da mindst ét køn har færre end {min_celle} repræsenterede overalt i det valgte udsnit.")
         return
 
     y_labels = list(data.keys())
@@ -556,7 +556,7 @@ def _render_koen_trend_tab(filters, min_celle=4):
         trend_data[year] = cats
 
     if not trend_data:
-        st.warning(f"Alle år er skjult, da mindst ét køn har færre end {min_celle} repræsenterede i hele perioden.")
+        st.error(f"Alle år er skjult, da mindst ét køn har færre end {min_celle} repræsenterede i hele perioden.")
         return
 
     visning = st.radio(
@@ -596,7 +596,7 @@ def _render_pub_koen_trend_tab(filters, min_celle=4):
         denom[year] = pub_totals.get(year, 0)
 
     if not trend_data:
-        st.warning(f"Alle år er skjult, da mindst ét køn har færre end {min_celle} repræsenterede i hele perioden.")
+        st.error(f"Alle år er skjult, da mindst ét køn har færre end {min_celle} repræsenterede i hele perioden.")
         return
 
     visning = st.radio(
@@ -645,7 +645,7 @@ def _render_koen_stil_trend(filters, min_celle=4):
                     trend_data[year][s] = cats[s]
 
     if not any(trend_data.values()):
-        st.warning(f"Alle stillingsgrupper er skjult, da mindst ét køn har færre end {min_celle} repræsenterede i hele perioden.")
+        st.error(f"Alle stillingsgrupper er skjult, da mindst ét køn har færre end {min_celle} repræsenterede i hele perioden.")
         return
 
     visning = st.radio(
@@ -710,7 +710,7 @@ def _render_koen_rate_trend(filters, taeller="forfatterskaber", min_celle=4):
     rate_data = suppressed
 
     if not rate_data:
-        st.warning(f"Alle år er skjult, da mindst ét køn har færre end {min_celle} repræsenterede i hele perioden.")
+        st.error(f"Alle år er skjult, da mindst ét køn har færre end {min_celle} repræsenterede i hele perioden.")
         return
 
     taeller_navn = "forfatterskaber" if taeller == "forfatterskaber" else "publikationer"
@@ -803,7 +803,7 @@ fakultet/institut-udsnit samlet, ikke yderligere opdelt pr. enhed.
     if not any(_koen_stil_data_raw.values()):
         st.error("Ingen publikationer matcher de valgte filtre.")
     elif not _koen_stil_data:
-        st.warning(f"Alle stillingsgrupper er skjult, da mindst ét køn har færre end {MIN_CELLE} repræsenterede overalt.")
+        st.error(f"Alle stillingsgrupper er skjult, da mindst ét køn har færre end {MIN_CELLE} repræsenterede overalt.")
     else:
         _tab_ks_n, _tab_ks_p = st.tabs(["Antal", "Andel (%)"])
         _unit_label = _current_unit_label(filters)

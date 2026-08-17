@@ -95,8 +95,26 @@ Hold musen over hver boks for at se de præcise tal.
 
     #"""
     _mode = filters.get("mode", "F")
-    _dims = hier_cols(_mode)
-    _org_rows = load_org_volume(filters, _mode)
+
+    # Tilføj Stillingsgruppe som ekstra treemap-niveau, hvis specifikke
+    # fakulteter eller institutter er eksplicit valgt - kun til selve
+    # treemap'et, IKKE til filters["mode"] selv (som resten af appens faner
+    # også læser, og som ikke skal påvirkes af denne ændring).
+    _treemap_mode = _mode
+    if "I" in _mode:
+        # Institut-niveauet er slået til (enten "I" eller "FI") - Stillingsgruppe
+        # vises kun, hvis et SPECIFIKT institut er valgt, uanset om fakultet også er det.
+        _show_stil_in_treemap = filters.get("institutter_explicit", False)
+    else:
+        # Kun fakultet-niveauet er slået til ("F") - Stillingsgruppe vises,
+        # så snart et specifikt fakultet er valgt.
+        _show_stil_in_treemap = filters.get("fakultet_explicit", False)
+
+    if _show_stil_in_treemap and "G" not in _treemap_mode:
+        _treemap_mode += "G"
+
+    _dims = hier_cols(_treemap_mode)
+    _org_rows = load_org_volume(filters, _treemap_mode)
     if _org_rows:
         _any_unit_selected = (
             filters.get("fakultet_explicit", False)
@@ -115,12 +133,7 @@ Hold musen over hver boks for at se de præcise tal.
     #"""
     
     # --- Faner ---
-    #tab_labels = [t for t in TABS
-                  #if t != "Forfatterprofil" or "G" in filters.get("mode", "")]
-    tab_labels = [
-        t for t in TABS
-        if t != "Diversitet" or filters.get("vis_koen") or filters.get("vis_statsborgerskab")
-    ]
+    tab_labels = [t for t in TABS]
     tabs = st.tabs(tab_labels)
     tabs_dict = dict(zip(tab_labels, tabs))
 
@@ -147,10 +160,9 @@ Hold musen over hver boks for at se de præcise tal.
     
     with tabs_dict["Forfatterprofil"]:
         tab_forfatterprofil.render(filters)
-    
-    if "Diversitet" in tabs_dict:
-        with tabs_dict["Diversitet"]:
-            tab_diversitet.render(filters)
+       
+    with tabs_dict["Diversitet"]:
+        tab_diversitet.render(filters)
     
     # Footer
     st.markdown(f"""

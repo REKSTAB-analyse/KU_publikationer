@@ -94,43 +94,6 @@ publikationstype eller tilføje en diversitetsdimension.
                 filters["stillingsgrupper"] = STILLINGSGRUPPER
                 filters["stillingsgrupper_explicit"] = False
 
-        with st.expander("**Diversitet**"):
-            show_koen = st.checkbox(
-                "**Køn**",
-                key="cb_koen", value=False,
-            )
-            show_statsbg = st.checkbox(
-                "**Statsborgerskab**",
-                key="cb_statsbg", value=False,
-            )
-
-            filters["vis_koen"] = show_koen
-            filters["vis_statsborgerskab"] = show_statsbg
-
-            if show_koen:
-                valgte_koen = st.multiselect(
-                    "Vælg køn (tom = alle)",
-                    options=["Kvinder", "Mænd"], default=[], key="sp_koen",
-                )
-                filters["køn"] = valgte_koen or ["Kvinder", "Mænd"]
-                filters["køn_explicit"] = bool(valgte_koen)
-            else:
-                filters["køn"] = ["Kvinder", "Mænd"]
-                filters["køn_explicit"] = False
-
-            if show_statsbg:
-                statsbg_opts = load_statsborgerskab_options(data_source)
-                valgte_statsbg = st.multiselect(
-                    "Vælg statsborgerskab (tom = alle)",
-                    options=statsbg_opts, default=[], key="sp_statsborgerskab",
-                )
-                filters["statsborgerskab"] = valgte_statsbg or statsbg_opts
-                filters["statsborgerskab_explicit"] = bool(valgte_statsbg)
-            else:
-                statsbg_opts = load_statsborgerskab_options(data_source)
-                filters["statsborgerskab"] = statsbg_opts
-                filters["statsborgerskab_explicit"] = False
-        
         with st.expander("**Publikationstype og adgang**"):
             st.caption(
                 "Filtrene begrænser, hvilke publikationer der indgår i analyserne."
