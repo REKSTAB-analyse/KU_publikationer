@@ -49,7 +49,8 @@ else:
 
 
 # --- Fakulteter ---
-FAC_ORDER = ["SAMF", "SCIENCE", "TEO", "SUND", "HUM", "JUR"]
+#FAC_ORDER = ["SAMF", "SCIENCE", "TEO", "SUND", "HUM", "JUR"]
+FAC_ORDER = ["HUM", "JUR", "SAMF", "SCIENCE", "SUND", "TEO"]
 
 FAC_ABBRS = {
     "Det Teologiske Fakultet": "TEO",
