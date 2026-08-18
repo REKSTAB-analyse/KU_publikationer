@@ -265,7 +265,8 @@ def _render_org_trend(trend_data, title, key_suffix):
         xaxis=dict(title="Udgivelsesår", dtick=1),
         yaxis=dict(title="Antal"),
         plot_bgcolor="white", height=420,
-        legend=dict(orientation="v", yanchor="middle", y=0.5, xanchor="left", x=1.02),
+        showlegend=True,
+        legend=dict(orientation="v", yanchor="top", y=1.0, xanchor="left", x=1.02),
         margin=dict(t=50, b=10, l=10, r=150),
     )
     st.plotly_chart(fig, width="stretch", config=PLOTLY_CONFIG, key=f"trend_chart_{key_suffix}")
@@ -344,7 +345,8 @@ def _render_ratio_trend(pub_trend, author_trend, title, key_suffix):
         xaxis=dict(title="Udgivelsesår", dtick=1),
         yaxis=dict(title="Publikationer pr. forfatter"),
         plot_bgcolor="white", height=420,
-        legend=dict(orientation="v", yanchor="middle", y=0.5, xanchor="left", x=1.02),
+        showlegend=True,
+        legend=dict(orientation="v", yanchor="top", y=1.0, xanchor="left", x=1.02),
         margin=dict(t=50, b=10, l=10, r=150),
     )
     st.plotly_chart(fig, width="stretch", config=PLOTLY_CONFIG, key=f"trend_chart_{key_suffix}")
