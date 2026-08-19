@@ -1,3 +1,4 @@
+from GitHub.tabs.diversitet import _current_unit_label
 import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -747,8 +748,14 @@ hvor mange forskellige lande hver enhed samarbejder med.
             chart_mode="antal", xaxis_title="Antal lande", hover_unit="lande",
         )
     
+
+    _land_trend_label = _current_unit_label(filters)
+    _land_trend_ku_note = (
+        "Siden ingen enheder er valgt i sidepanelet, dækker figurene nedenfor **hele KU**."
+        if _land_trend_label == "KU samlet" else ""
+    )
     st.markdown(
-"""
+f"""
 ---
 
 #### Udvikling over tid
@@ -757,6 +764,8 @@ Graferne nedenfor dækker altid hele den tilgængelige periode, uanset sidepanel
 valgte årsinterval - øvrige filtre gælder stadig, inklusiv valg af fakultet/institut. Er intet
 valgt i sidepanelet, dækker graferne hele KU; er f.eks. kun HUM valgt, viser graferne udelukkende
 udviklingen for HUM. 
+
+{_land_trend_ku_note}
 """
     )
     _tab_trend_land, _tab_trend_ekst, _tab_trend_antal_land = st.tabs(
