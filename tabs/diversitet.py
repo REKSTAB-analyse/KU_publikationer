@@ -6,7 +6,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 import streamlit as st
 import plotly.graph_objects as go
 from data.loader import get_cursor
-from components.charts import fig_hbar_stacked, fig_year_trend, PLOTLY_CONFIG, _build_y_positions, _BAR_WIDTH
+from components.charts import fig_hbar_stacked, fig_year_trend, PLOTLY_CONFIG, _build_y_positions, _BAR_WIDTH, _INTRA_GAP, grouped_bar_offsets
 from components.export import render_table_export
 from components.colors import build_faculty_colors, stillingsgruppe_colors
 from config import hier_cols, doi_filter_sql, author_count_filter, show_ku_samlet, year_range_label, breakdown_label, STIL_ORDER, COUNTRY_LOOKUP
@@ -374,24 +374,31 @@ def _render_statsbg_rate(filters, mode, taeller="forfatterskaber", min_celle=4):
     if any(v is not None for v in cluster_map.values()):
         group_keys = ["__ku__" if lbl == "KU samlet" else cluster_map.get(lbl, "__single__") for lbl in y_labels]
 
+    n_kat = len(_STATSBG_RATE_KATEGORIER)
+    row_scale = max(1.0, n_kat / 3)  # flere klyngede søjler pr. række => højere rækker
+
     if group_keys is not None:
         y_pos, tick_pos, tick_labels = _build_y_positions(y_labels, group_keys)
-        total_span = (y_pos[-1] - y_pos[0]) if len(y_pos) > 1 else 0
-        height = max(200, int(total_span * 55 + 150))
-        yaxis_kwargs = dict(tickmode="array", tickvals=tick_pos, ticktext=tick_labels,
-                             autorange="reversed", showgrid=False, zeroline=False)
     else:
-        y_pos = y_labels
-        height = max(160, len(y_labels) * 40 + 80)
-        yaxis_kwargs = dict(autorange="reversed")
+        y_pos = list(range(len(y_labels)))
+        tick_pos, tick_labels = y_pos, y_labels
+    y_pos = [y * row_scale for y in y_pos]
+    tick_pos = [y * row_scale for y in tick_pos]
 
-    bar_width = min(0.13, 0.8 / len(_STATSBG_RATE_KATEGORIER))
+    total_span = (y_pos[-1] - y_pos[0]) if len(y_pos) > 1 else 0
+    height = max(200, int(total_span * 55 + 150))
+    yaxis_kwargs = dict(
+        tickmode="array", tickvals=tick_pos, ticktext=tick_labels,
+        autorange="reversed", showgrid=False, zeroline=False,
+    )
+    offsets, bar_width = grouped_bar_offsets(n_kat, span=_INTRA_GAP * row_scale)
 
     fig = go.Figure()
-    for gruppe in _STATSBG_RATE_KATEGORIER:
+    for i, gruppe in enumerate(_STATSBG_RATE_KATEGORIER):
+        y_vals = [y + offsets[i] for y in y_pos]
         x_vals = [rate_data[u].get(gruppe) for u in y_labels]
         fig.add_trace(go.Bar(
-            x=x_vals, y=y_pos, orientation="h", name=gruppe,
+            x=x_vals, y=y_vals, orientation="h", name=gruppe,
             marker=dict(color=STATSBG_COLORS[gruppe], line=dict(color="white", width=1)),
             width=bar_width,
             text=[f"{v:.2f}" if v is not None else "" for v in x_vals],
@@ -404,7 +411,7 @@ def _render_statsbg_rate(filters, mode, taeller="forfatterskaber", min_celle=4):
         title=dict(text=f"{taeller_navn.capitalize()} pr. forfatter, pr. statsborgerskabsregion, {breakdown_label(mode)}", font=dict(size=14)),
         xaxis=dict(title=f"{taeller_navn.capitalize()} pr. forfatter"),
         yaxis=dict(**yaxis_kwargs),
-        barmode="group", bargap=0.3, bargroupgap=0.1,
+        barmode="overlay",
         plot_bgcolor="white", height=height,
         legend=dict(orientation="v", yanchor="middle", y=0.5, xanchor="left", x=1.02),
         margin=dict(t=50, b=10, l=10, r=150),
@@ -465,27 +472,31 @@ def _render_koen_rate(filters, mode, taeller="forfatterskaber", min_celle=4):
             for lbl in y_labels
         ]
 
-    use_positions = group_keys is not None
-    if use_positions:
+    n_kat = 2  # Kvinder, Mænd
+    row_scale = max(1.0, n_kat / 3)
+
+    if group_keys is not None:
         y_pos, tick_pos, tick_labels = _build_y_positions(y_labels, group_keys)
-        total_span = (y_pos[-1] - y_pos[0]) if len(y_pos) > 1 else 0
-        height = max(200, int(total_span * 55 + 150))
-        bar_width = _BAR_WIDTH
-        yaxis_kwargs = dict(
-            tickmode="array", tickvals=tick_pos, ticktext=tick_labels,
-            autorange="reversed", showgrid=False, zeroline=False,
-        )
     else:
-        y_pos = y_labels
-        height = max(160, len(y_labels) * 40 + 80)
-        bar_width = 0.35
-        yaxis_kwargs = dict(autorange="reversed")
+        y_pos = list(range(len(y_labels)))
+        tick_pos, tick_labels = y_pos, y_labels
+    y_pos = [y * row_scale for y in y_pos]
+    tick_pos = [y * row_scale for y in tick_pos]
+
+    total_span = (y_pos[-1] - y_pos[0]) if len(y_pos) > 1 else 0
+    height = max(200, int(total_span * 55 + 150))
+    yaxis_kwargs = dict(
+        tickmode="array", tickvals=tick_pos, ticktext=tick_labels,
+        autorange="reversed", showgrid=False, zeroline=False,
+    )
+    offsets, bar_width = grouped_bar_offsets(n_kat, span=_INTRA_GAP * row_scale)
 
     fig = go.Figure()
-    for koen in ("Kvinder", "Mænd"):
+    for i, koen in enumerate(("Kvinder", "Mænd")):
+        y_vals = [y + offsets[i] for y in y_pos]
         x_vals = [rate_data[u].get(koen) for u in y_labels]
         fig.add_trace(go.Bar(
-            x=x_vals, y=y_pos, orientation="h", name=koen,
+            x=x_vals, y=y_vals, orientation="h", name=koen,
             marker=dict(color=KOEN_COLORS[koen], line=dict(color="white", width=1)),
             width=bar_width,
             text=[f"{v:.2f}" if v is not None else "" for v in x_vals],
@@ -498,7 +509,7 @@ def _render_koen_rate(filters, mode, taeller="forfatterskaber", min_celle=4):
         title=dict(text=f"Publikationer pr. forfatter, pr. køn, {breakdown_label(mode)}", font=dict(size=14)),
         xaxis=dict(title="Publikationer pr. forfatter"),
         yaxis=dict(**yaxis_kwargs),
-        barmode="group", bargap=0.3, bargroupgap=0.1,
+        barmode="overlay",
         plot_bgcolor="white", height=height,
         legend=dict(orientation="v", yanchor="middle", y=0.5, xanchor="left", x=1.02),
         margin=dict(t=50, b=10, l=10, r=150),
@@ -1296,27 +1307,33 @@ def render(filters: dict) -> None:
     st.markdown(
 f"""
 Fanen belyser den demografiske sammensætning af KU's publicerende forfattere, opdelt i 
-to selvstændige afsnit: 
+to selvstændige sektion, som vælges nedenfor: 
 
 - **Køn** - bestemt ud fra CPR-nummer, se metodenote nedenfor
 - **Statsborgerskab** - grupperet i regioner, dog med Danmark som sin egen kategori
 
-Begge afsnit følger samme opbygning: en fordeling, en krydsning med stillingsgruppe, 
+Begge sektioner følger samme opbygning: en fordeling, en krydsning med stillingsgruppe, 
 en publikationsbaseret variant og udvikling over tid. 
 
 Enheder, hvor mindst én kategori har **færre end {MIN_CELLE}** repræsenterede, vises ikke - hverken
 i graferne eller i eksport-tabellerne.
-
----
 """
     )
 
     _mode = filters.get("mode", "F")
 
-    # --- Kønsfordeling (personer) ---
-    st.markdown(
+    _kategori = st.radio(
+        "Vælg mellem", options=["Køn", "Statsborgerskab"],
+        index=0, horizontal=True, key="diversitet-kategori" 
+    )
+
+    if _kategori == "Køn":
+        # --- Kønsfordeling (personer) ---
+        st.markdown(
 
 """
+---
+
 ### Køn
 
 Køn er bestemt ud fra det sidste ciffer i forfatterens CPR-nummer: et **ulige** ciffer
@@ -1329,25 +1346,25 @@ organisatoriske niveauer. Andelen (%) angiver, hvor stor en del af enhedens **pu
 forfattere** der er af hvert køn.
 """
     )
-    _koen_totals = _query_koen_totals(filters, _mode, count_col="ext_id")
-    _tab_kf_n, _tab_kf_p = st.tabs(["Antal", "Andel (%)"])
-    with _tab_kf_n:
-        _render_koen_section(filters, _mode, "Kønsfordeling", chart_mode="antal",
-                              pct_denominators=_koen_totals, min_celle=MIN_CELLE)
-    with _tab_kf_p:
-        _render_koen_section(filters, _mode, "Kønsfordeling", chart_mode="pct",
-                              pct_denominators=_koen_totals, min_celle=MIN_CELLE)
+        _koen_totals = _query_koen_totals(filters, _mode, count_col="ext_id")
+        _tab_kf_n, _tab_kf_p = st.tabs(["Antal", "Andel (%)"])
+        with _tab_kf_n:
+            _render_koen_section(filters, _mode, "Kønsfordeling", chart_mode="antal",
+                                pct_denominators=_koen_totals, min_celle=MIN_CELLE)
+        with _tab_kf_p:
+            _render_koen_section(filters, _mode, "Kønsfordeling", chart_mode="pct",
+                                pct_denominators=_koen_totals, min_celle=MIN_CELLE)
 
 
-    # --- Kønsfordeling pr. stillingsgruppe ---
-    _koen_stil_unit_label = _current_unit_label(filters)
-    _koen_stil_ku_note = (
-        " Ingen specifikke enheder er valgt i sidepanelet - og figuren nedenfor viser kønsfordelingen pr. stillingsgruppe på tværs af **hele KU**."
-        if _koen_stil_unit_label == "KU samlet" else ""
-    )
+        # --- Kønsfordeling pr. stillingsgruppe ---
+        _koen_stil_unit_label = _current_unit_label(filters)
+        _koen_stil_ku_note = (
+            " Ingen specifikke enheder er valgt i sidepanelet - og figuren nedenfor viser kønsfordelingen pr. stillingsgruppe på tværs af **hele KU**."
+            if _koen_stil_unit_label == "KU samlet" else ""
+        )
 
-    st.markdown("---")
-    st.markdown(
+        st.markdown("---")
+        st.markdown(
 f"""
 ##### Kønsfordeling pr. stillingsgruppe
 
@@ -1358,39 +1375,39 @@ fakultet/institut-udsnit samlet, ikke yderligere opdelt pr. enhed.
 
 {_koen_stil_ku_note}
 """
-    )
-    _koen_stil_data_raw = _query_koen_pr_stil(filters)
-    _koen_stil_data = _filter_suppressed_units(_koen_stil_data_raw, MIN_CELLE)
-    if not any(_koen_stil_data_raw.values()):
-        st.error("Ingen publikationer matcher de valgte filtre.")
-    elif not _koen_stil_data:
-        st.error(f"Alle stillingsgrupper er skjult, da mindst ét køn har færre end {MIN_CELLE} repræsenterede overalt.")
-    else:
-        _tab_ks_n, _tab_ks_p = st.tabs(["Antal", "Andel (%)"])
-        _unit_label = _current_unit_label(filters)
-        with _tab_ks_n:
-            fig = fig_hbar_stacked(
-                data=_koen_stil_data, order=KOEN_ORDER, colors=KOEN_COLORS, labels=KOEN_LABELS,
-                title=f"Kønsfordeling pr. stillingsgruppe, {_unit_label}", xaxis_title="Antal forfattere",
-                mode="antal", legend_position="right", hover_unit="forfattere",
-            )
-            st.plotly_chart(fig, width="stretch", config=PLOTLY_CONFIG, key="diversitet_koen_stil_antal")
-        with _tab_ks_p:
-            fig = fig_hbar_stacked(
-                data=_koen_stil_data, order=KOEN_ORDER, colors=KOEN_COLORS, labels=KOEN_LABELS,
-                title=f"Kønsfordeling pr. stillingsgruppe, {_unit_label}", xaxis_title="Andel (%)",
-                mode="pct", legend_position="right", hover_unit="forfattere",
-            )
-            st.plotly_chart(fig, width="stretch", config=PLOTLY_CONFIG, key="diversitet_koen_stil_pct")
-        render_table_export(
-            data=_koen_stil_data, row_label="Stillingsgruppe", col_labels=KOEN_LABELS,
-            filename="koen_pr_stillingsgruppe.xlsx", sheet_name="Køn pr. stillingsgruppe",
-            key="export_diversitet_koen_stil",
         )
+        _koen_stil_data_raw = _query_koen_pr_stil(filters)
+        _koen_stil_data = _filter_suppressed_units(_koen_stil_data_raw, MIN_CELLE)
+        if not any(_koen_stil_data_raw.values()):
+            st.error("Ingen publikationer matcher de valgte filtre.")
+        elif not _koen_stil_data:
+            st.error(f"Alle stillingsgrupper er skjult, da mindst ét køn har færre end {MIN_CELLE} repræsenterede overalt.")
+        else:
+            _tab_ks_n, _tab_ks_p = st.tabs(["Antal", "Andel (%)"])
+            _unit_label = _current_unit_label(filters)
+            with _tab_ks_n:
+                fig = fig_hbar_stacked(
+                    data=_koen_stil_data, order=KOEN_ORDER, colors=KOEN_COLORS, labels=KOEN_LABELS,
+                    title=f"Kønsfordeling pr. stillingsgruppe, {_unit_label}", xaxis_title="Antal forfattere",
+                    mode="antal", legend_position="right", hover_unit="forfattere",
+                )
+                st.plotly_chart(fig, width="stretch", config=PLOTLY_CONFIG, key="diversitet_koen_stil_antal")
+            with _tab_ks_p:
+                fig = fig_hbar_stacked(
+                    data=_koen_stil_data, order=KOEN_ORDER, colors=KOEN_COLORS, labels=KOEN_LABELS,
+                    title=f"Kønsfordeling pr. stillingsgruppe, {_unit_label}", xaxis_title="Andel (%)",
+                    mode="pct", legend_position="right", hover_unit="forfattere",
+                )
+                st.plotly_chart(fig, width="stretch", config=PLOTLY_CONFIG, key="diversitet_koen_stil_pct")
+            render_table_export(
+                data=_koen_stil_data, row_label="Stillingsgruppe", col_labels=KOEN_LABELS,
+                filename="koen_pr_stillingsgruppe.xlsx", sheet_name="Køn pr. stillingsgruppe",
+                key="export_diversitet_koen_stil",
+            )
 
-    # --- Publikationer pr. køn ---
-    st.markdown("---")
-    st.markdown(
+        # --- Publikationer pr. køn ---
+        st.markdown("---")
+        st.markdown(
 """
 ##### Publikationer pr. køn
 
@@ -1412,45 +1429,45 @@ hver enkelt person selv har bidraget til.
 Ligger de to tal tæt på hinanden, har kønnet sjældent en anden forfatter af **samme**
 som medforfatter på samme artikel. Er gabet stort, sker det oftere. 
 """
-    )
-    _pub_koen_totals = _query_koen_totals(filters, _mode, count_col="PURE_ID")
-    _tab_pk_n, _tab_pk_p, _tab_pk_r_pub, _tab_pk_r_fs = st.tabs(
-        ["Antal", "Andel (%)", "Publikationer pr. forfatter", "Forfatterskaber pr. forfatter"]
-    )
-    with _tab_pk_n:
-        _render_koen_section(filters, _mode, "Publikationer pr. køn", chart_mode="antal",
-                              count_col="PURE_ID", xaxis_title="Antal publikationer",
-                              pct_denominators=_pub_koen_totals, min_celle=MIN_CELLE)
-    with _tab_pk_p:
-        _render_koen_section(filters, _mode, "Publikationer pr. køn", chart_mode="pct",
-                              count_col="PURE_ID", xaxis_title="Antal publikationer",
-                              pct_denominators=_pub_koen_totals, min_celle=MIN_CELLE)
-    with _tab_pk_r_pub:
-        st.markdown(
+        )
+        _pub_koen_totals = _query_koen_totals(filters, _mode, count_col="PURE_ID")
+        _tab_pk_n, _tab_pk_p, _tab_pk_r_pub, _tab_pk_r_fs = st.tabs(
+            ["Antal", "Andel (%)", "Publikationer pr. forfatter", "Forfatterskaber pr. forfatter"]
+        )
+        with _tab_pk_n:
+            _render_koen_section(filters, _mode, "Publikationer pr. køn", chart_mode="antal",
+                                count_col="PURE_ID", xaxis_title="Antal publikationer",
+                                pct_denominators=_pub_koen_totals, min_celle=MIN_CELLE)
+        with _tab_pk_p:
+            _render_koen_section(filters, _mode, "Publikationer pr. køn", chart_mode="pct",
+                                count_col="PURE_ID", xaxis_title="Antal publikationer",
+                                pct_denominators=_pub_koen_totals, min_celle=MIN_CELLE)
+        with _tab_pk_r_pub:
+            st.markdown(
 """
 Antal **distinkte publikationer** med mindst én forfatter af det pågældende køn, divideret med
 antal forfattere af det køn. En publikation med flere forfattere af samme køn tælles kun 
 **én** gang - raten undervuderer derfor grupper, der ofte publicerer sammen med eget køn. 
 """
-        )
-        _render_koen_rate(filters, _mode, taeller="publikationer", min_celle=MIN_CELLE)
-    with _tab_pk_r_fs:
-        st.markdown(
+            )
+            _render_koen_rate(filters, _mode, taeller="publikationer", min_celle=MIN_CELLE)
+        with _tab_pk_r_fs:
+            st.markdown(
 """
 Antal **forfatterskaber** for det pågældende køn, divideret med antal forfattere af det køn. 
 """
+            )
+            _render_koen_rate(filters, _mode, taeller="forfatterskaber", min_celle=MIN_CELLE)
+
+        # --- Kønsfordeling over tid ---
+        _koen_rate_unit_label = _current_unit_label(filters)
+        _koen_rate_ku_note = (
+            "Siden ingen enheder er valgt i sidepanelet, dækker graferne nedenfor **hele KU**."
+            if _koen_rate_unit_label == "KU samlet" else "" 
         )
-        _render_koen_rate(filters, _mode, taeller="forfatterskaber", min_celle=MIN_CELLE)
 
-    # --- Kønsfordeling over tid ---
-    _koen_rate_unit_label = _current_unit_label(filters)
-    _koen_rate_ku_note = (
-        "Siden ingen enheder er valgt i sidepanelet, dækker graferne nedenfor **hele KU**."
-        if _koen_rate_unit_label == "KU samlet" else "" 
-    )
-
-    st.markdown("---")
-    st.markdown(
+        st.markdown("---")
+        st.markdown(
 f"""
 #### Udvikling i køn over tid
 
@@ -1464,25 +1481,27 @@ tendens, ikke enkeltårs absolutte tal, til at vurdere udviklingen.
 
 {_koen_rate_ku_note}
 """
-    )
-    (_tab_trend_kf, _tab_trend_ks, _tab_trend_pk,
-     _tab_trend_pr_pub, _tab_trend_pr_fs) = st.tabs([
-        "Kønsfordeling", "Kønsfordeling pr. stillingsgruppe", "Publikationer pr. køn",
-        "Publikationer pr. forfatter", "Forfatterskaber pr. forfatter",
-    ])
-    with _tab_trend_kf:
-        _render_koen_trend_tab(filters, min_celle=MIN_CELLE)
-    with _tab_trend_ks:
-        _render_koen_stil_trend(filters, min_celle=MIN_CELLE)
-    with _tab_trend_pk:
-        _render_pub_koen_trend_tab(filters, min_celle=MIN_CELLE)
-    with _tab_trend_pr_pub:
-        _render_koen_rate_trend(filters, taeller="publikationer", min_celle=MIN_CELLE)
-    with _tab_trend_pr_fs:
-        _render_koen_rate_trend(filters, taeller="forfatterskaber", min_celle=MIN_CELLE)
+        )
+        (_tab_trend_kf, _tab_trend_ks, _tab_trend_pk,
+        _tab_trend_pr_pub, _tab_trend_pr_fs) = st.tabs([
+            "Kønsfordeling", "Kønsfordeling pr. stillingsgruppe", "Publikationer pr. køn",
+            "Publikationer pr. forfatter", "Forfatterskaber pr. forfatter",
+        ])
+        with _tab_trend_kf:
+            _render_koen_trend_tab(filters, min_celle=MIN_CELLE)
+        with _tab_trend_ks:
+            _render_koen_stil_trend(filters, min_celle=MIN_CELLE)
+        with _tab_trend_pk:
+            _render_pub_koen_trend_tab(filters, min_celle=MIN_CELLE)
+        with _tab_trend_pr_pub:
+            _render_koen_rate_trend(filters, taeller="publikationer", min_celle=MIN_CELLE)
+        with _tab_trend_pr_fs:
+            _render_koen_rate_trend(filters, taeller="forfatterskaber", min_celle=MIN_CELLE)
 
-    # --- Statsborgerskab (endnu ikke bygget) ---
-    st.markdown(
+    else:
+
+        # --- Statsborgerskab (endnu ikke bygget) ---
+        st.markdown(
 """
 ---
 
@@ -1502,20 +1521,20 @@ valgte organisatoriske niveauer. Andelen (%) angiver, hvor stor en del af enhede
 af de persioner, der har publiceret fra SUND i perioden, har et asiatisk statsborgerskab, 
 ikke nødvendigvis af 15 % af SUND's samlede ansatte. 
 """
-    )
-    _tab_sb_n, _tab_sb_p = st.tabs(["Antal", "Andel (%)"])
-    with _tab_sb_n:
-        _render_statsbg_section(filters, _mode, chart_mode="antal", min_celle=MIN_CELLE)
-    with _tab_sb_p:
-        _render_statsbg_section(filters, _mode, chart_mode="pct", min_celle=MIN_CELLE)
+        )
+        _tab_sb_n, _tab_sb_p = st.tabs(["Antal", "Andel (%)"])
+        with _tab_sb_n:
+            _render_statsbg_section(filters, _mode, chart_mode="antal", min_celle=MIN_CELLE)
+        with _tab_sb_p:
+            _render_statsbg_section(filters, _mode, chart_mode="pct", min_celle=MIN_CELLE)
 
-    _statsbg_stil_label = _current_unit_label(filters)
-    _statsbg_stil_note = (
-        " Siden ingen enheder er valgt i sidepanelet, vises figuren nedenfor for **hele KU**."
-        if _statsbg_stil_label == "KU samlet" else ""
-    )
-    st.markdown("---")
-    st.markdown(
+        _statsbg_stil_label = _current_unit_label(filters)
+        _statsbg_stil_note = (
+            " Siden ingen enheder er valgt i sidepanelet, vises figuren nedenfor for **hele KU**."
+            if _statsbg_stil_label == "KU samlet" else ""
+        )
+        st.markdown("---")
+        st.markdown(
 f"""
 ##### Statsborgerskab pr. stillingsgruppe
 
@@ -1525,42 +1544,42 @@ fakultet/institut-udsnit samlet, ikke yderligere opdelt pr. enhed.
 
 {_statsbg_stil_note}
 """
-    )
-    _statsbg_stil_data_raw = _query_statsbg_pr_stil(filters)
-    _statsbg_stil_data = {
-        stil: cats for stil, cats in _statsbg_stil_data_raw.items()
-        if not any(v < MIN_CELLE for k, v in cats.items() if k != "Ukendt")
-    }
-    if not any(_statsbg_stil_data_raw.values()):
-        st.error("Ingen publikationer matcher de valgte filtre.")
-    elif not _statsbg_stil_data:
-        st.error(f"Alle stillingsgrupper er skjult, da mindst én region har færre end {MIN_CELLE} repræsenterede overalt.")
-    else:
-        _tab_sbs_n, _tab_sbs_p = st.tabs(["Antal", "Andel (%)"])
-        _unit_label = _current_unit_label(filters)
-        with _tab_sbs_n:
-            fig = fig_hbar_stacked(
-                data=_statsbg_stil_data, order=STATSBG_ORDER, colors=STATSBG_COLORS, labels=STATSBG_LABELS,
-                title=f"Statsborgerskab pr. stillingsgruppe, {_unit_label}", xaxis_title="Antal forfattere",
-                mode="antal", legend_position="right", hover_unit="forfattere",
-            )
-            st.plotly_chart(fig, width="stretch", config=PLOTLY_CONFIG, key="diversitet_statsbg_stil_antal")
-        with _tab_sbs_p:
-            fig = fig_hbar_stacked(
-                data=_statsbg_stil_data, order=STATSBG_ORDER, colors=STATSBG_COLORS, labels=STATSBG_LABELS,
-                title=f"Statsborgerskab pr. stillingsgruppe, {_unit_label}", xaxis_title="Andel (%)",
-                mode="pct", legend_position="right", hover_unit="forfattere",
-            )
-            st.plotly_chart(fig, width="stretch", config=PLOTLY_CONFIG, key="diversitet_statsbg_stil_pct")
-        render_table_export(
-            data=_statsbg_stil_data, row_label="Stillingsgruppe", col_labels=STATSBG_LABELS,
-            filename="statsbg_pr_stillingsgruppe.xlsx", sheet_name="Statsbg pr. stillingsgruppe",
-            key="export_diversitet_statsbg_stil",
         )
+        _statsbg_stil_data_raw = _query_statsbg_pr_stil(filters)
+        _statsbg_stil_data = {
+            stil: cats for stil, cats in _statsbg_stil_data_raw.items()
+            if not any(v < MIN_CELLE for k, v in cats.items() if k != "Ukendt")
+        }
+        if not any(_statsbg_stil_data_raw.values()):
+            st.error("Ingen publikationer matcher de valgte filtre.")
+        elif not _statsbg_stil_data:
+            st.error(f"Alle stillingsgrupper er skjult, da mindst én region har færre end {MIN_CELLE} repræsenterede overalt.")
+        else:
+            _tab_sbs_n, _tab_sbs_p = st.tabs(["Antal", "Andel (%)"])
+            _unit_label = _current_unit_label(filters)
+            with _tab_sbs_n:
+                fig = fig_hbar_stacked(
+                    data=_statsbg_stil_data, order=STATSBG_ORDER, colors=STATSBG_COLORS, labels=STATSBG_LABELS,
+                    title=f"Statsborgerskab pr. stillingsgruppe, {_unit_label}", xaxis_title="Antal forfattere",
+                    mode="antal", legend_position="right", hover_unit="forfattere",
+                )
+                st.plotly_chart(fig, width="stretch", config=PLOTLY_CONFIG, key="diversitet_statsbg_stil_antal")
+            with _tab_sbs_p:
+                fig = fig_hbar_stacked(
+                    data=_statsbg_stil_data, order=STATSBG_ORDER, colors=STATSBG_COLORS, labels=STATSBG_LABELS,
+                    title=f"Statsborgerskab pr. stillingsgruppe, {_unit_label}", xaxis_title="Andel (%)",
+                    mode="pct", legend_position="right", hover_unit="forfattere",
+                )
+                st.plotly_chart(fig, width="stretch", config=PLOTLY_CONFIG, key="diversitet_statsbg_stil_pct")
+            render_table_export(
+                data=_statsbg_stil_data, row_label="Stillingsgruppe", col_labels=STATSBG_LABELS,
+                filename="statsbg_pr_stillingsgruppe.xlsx", sheet_name="Statsbg pr. stillingsgruppe",
+                key="export_diversitet_statsbg_stil",
+            )
 
-    # --- Publikationer pr. statsborgerskab ---
-    st.markdown("---")
-    st.markdown(
+        # --- Publikationer pr. statsborgerskab ---
+        st.markdown("---")
+        st.markdown(
 """
 ##### Publikationer pr. statsborgerskab
 
@@ -1586,30 +1605,30 @@ typisk, at hver artikel kun har **én** forfatter fra netop den region, uanset h
 forfattere regionen har totalt. 
 
 """
-    )
-    _pub_statsbg_totals = _query_koen_totals(filters, _mode, count_col="PURE_ID")
-    _tab_psb_n, _tab_psb_p, _tab_psb_r_pub, _tab_psb_r_fs = st.tabs(
-        ["Antal", "Andel (%)", "Publikationer pr. forfatter", "Forfatterskaber pr. forfatter"]
-    )
-    with _tab_psb_n:
-        _render_statsbg_section(filters, _mode, chart_mode="antal", count_col="PURE_ID",
-                                 xaxis_title="Antal publikationer", min_celle=MIN_CELLE)
-    with _tab_psb_p:
-        _render_statsbg_section(filters, _mode, chart_mode="pct", count_col="PURE_ID",
-                                 xaxis_title="Antal publikationer", min_celle=MIN_CELLE)
-    with _tab_psb_r_pub:
-        _render_statsbg_rate(filters, _mode, taeller="publikationer", min_celle=MIN_CELLE)
-    with _tab_psb_r_fs:
-        _render_statsbg_rate(filters, _mode, taeller="forfatterskaber", min_celle=MIN_CELLE)
+        )
+        _pub_statsbg_totals = _query_koen_totals(filters, _mode, count_col="PURE_ID")
+        _tab_psb_n, _tab_psb_p, _tab_psb_r_pub, _tab_psb_r_fs = st.tabs(
+            ["Antal", "Andel (%)", "Publikationer pr. forfatter", "Forfatterskaber pr. forfatter"]
+        )
+        with _tab_psb_n:
+            _render_statsbg_section(filters, _mode, chart_mode="antal", count_col="PURE_ID",
+                                    xaxis_title="Antal publikationer", min_celle=MIN_CELLE)
+        with _tab_psb_p:
+            _render_statsbg_section(filters, _mode, chart_mode="pct", count_col="PURE_ID",
+                                    xaxis_title="Antal publikationer", min_celle=MIN_CELLE)
+        with _tab_psb_r_pub:
+            _render_statsbg_rate(filters, _mode, taeller="publikationer", min_celle=MIN_CELLE)
+        with _tab_psb_r_fs:
+            _render_statsbg_rate(filters, _mode, taeller="forfatterskaber", min_celle=MIN_CELLE)
 
-    _statsbg_trend_label = _current_unit_label(filters)
-    _statsbg_trend_note = (
-        "Figurene nedenfor vises for **hele KU**, da ingen specifikke enheder er valgt i sidepanelet."
-        if _statsbg_trend_label == "KU samlet" else ""
-    )
+        _statsbg_trend_label = _current_unit_label(filters)
+        _statsbg_trend_note = (
+            "Figurene nedenfor vises for **hele KU**, da ingen specifikke enheder er valgt i sidepanelet."
+            if _statsbg_trend_label == "KU samlet" else ""
+        )
 
-    st.markdown("---")
-    st.markdown(
+        st.markdown("---")
+        st.markdown(
 f"""
 ##### Udvikling i statsborgerskaber over tid
 
@@ -1624,16 +1643,16 @@ overordnede tendens, ikke enkeltårs absolutte tal, til at vurdere udviklingen.
 
 {_statsbg_stil_note}
 """
-    )
-    (_tab_sbt_f, _tab_sbt_p, _tab_sbt_r_pub, _tab_sbt_r_fs) = st.tabs([
-        "Statsborgerskabsfordeling", "Publikationer pr. region",
-        "Publikationer pr. forfatter", "Forfatterskaber pr. forfatter",
-    ])
-    with _tab_sbt_f:
-        _render_statsbg_trend_tab(filters, min_celle=MIN_CELLE)
-    with _tab_sbt_p:
-        _render_statsbg_pub_trend_tab(filters, min_celle=MIN_CELLE)
-    with _tab_sbt_r_pub:
-        _render_statsbg_rate_trend(filters, taeller="publikationer", min_celle=MIN_CELLE)
-    with _tab_sbt_r_fs:
-        _render_statsbg_rate_trend(filters, taeller="forfatterskaber", min_celle=MIN_CELLE)
+        )
+        (_tab_sbt_f, _tab_sbt_p, _tab_sbt_r_pub, _tab_sbt_r_fs) = st.tabs([
+            "Statsborgerskabsfordeling", "Publikationer pr. region",
+            "Publikationer pr. forfatter", "Forfatterskaber pr. forfatter",
+        ])
+        with _tab_sbt_f:
+            _render_statsbg_trend_tab(filters, min_celle=MIN_CELLE)
+        with _tab_sbt_p:
+            _render_statsbg_pub_trend_tab(filters, min_celle=MIN_CELLE)
+        with _tab_sbt_r_pub:
+            _render_statsbg_rate_trend(filters, taeller="publikationer", min_celle=MIN_CELLE)
+        with _tab_sbt_r_fs:
+            _render_statsbg_rate_trend(filters, taeller="forfatterskaber", min_celle=MIN_CELLE)
