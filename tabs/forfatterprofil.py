@@ -40,6 +40,17 @@ NATIONALITET_LABELS = {
 def _slugify(text: str) -> str:
     return re.sub(r"[^a-z0-9]+", "_", text.lower()).strip("_")
 
+def _current_unit_label(filters):
+    """Beskriver den aktuelt fokuserede enhed ud fra sidepanelets
+    fakultet/institut-valg - 'KU samlet', hvis intet er eksplicit valgt.
+    Samme funktion som i diversitet.py."""
+    if filters.get('institutter_explicit', False):
+        insts = filters['institutter']
+        return insts[0] if len(insts) == 1 else f"{len(insts)} valgte institutter"
+    if filters.get('fakultet_explicit', False):
+        faks = filters['fakultet']
+        return faks[0] if len(faks) == 1 else f"{len(faks)} valgte fakulteter"
+    return "KU samlet"
 
 def _base_where_and_params(filters):
     ph = lambda lst: ", ".join(["?" for _ in lst])
@@ -404,76 +415,50 @@ def _render_stil_trend(filters):
     )
 
 @st.cache_data
-def _query_korr_by_stil(filters, mode):
-    """Andel forfatterskaber med korresponderende forfatter, brudt ned på
-    stillingsgruppe OG de organisatoriske niveauer valgt i sidepanelet
-    (Fak/Inst) - stillingsgruppe er altid det fineste niveau, tilføjet
-    efter de øvrige valgte dimensioner."""
+def _query_korr_by_stil(filters):
+    """Andel forfatterskaber med korresponderende forfatter, brudt ned KUN
+    på stillingsgruppe - ikke yderligere organisatorisk opdelt. Sidepanelets
+    Fak/Inst-valg filtrerer blot, hvilken population der indgår, samme
+    princip som Diversitet-fanens 'Kønsfordeling pr. stillingsgruppe'. Er
+    intet fakultet/institut valgt, dækker resultatet dermed hele KU."""
     where_sql, params = _base_where_and_params(filters)
-    dims = hier_cols(mode) + ["Stil"]
-    n_dims = len(dims)
-
-    select_dims = ", ".join(
-        f"COALESCE({col}, 'Ukendt') AS dim_{i}" if col == "Stil" else f"{col} AS dim_{i}"
-        for i, col in enumerate(dims)
-    ) + ", "
-    group_by = ", ".join(str(i) for i in range(1, n_dims + 2))
-    order_by_sql = ", ".join(str(i) for i in range(1, n_dims + 1))
-
     sql = f"""
-        SELECT {select_dims}COALESCE(Korr, 'Ukendt') AS korr, COUNT(*) AS n
+        SELECT COALESCE(Stil, 'Ukendt') AS stil, COALESCE(Korr, 'Ukendt') AS korr, COUNT(*) AS n
         FROM pubs
         {where_sql}
-        GROUP BY {group_by}
-        ORDER BY {order_by_sql}
+        GROUP BY 1, 2
     """
     rows = get_cursor().execute(sql, params).fetchall()
-
-    result, cluster_map = {}, {}
-    for row in rows:
-        dim_values = row[:n_dims]
-        cat = row[n_dims]
-        n = row[n_dims + 1]
-        dim_label = " | ".join(str(v) for v in reversed(dim_values))
-        clusters = tuple(dim_values[:-1]) if n_dims > 1 else None
-        if dim_label not in result:
-            result[dim_label] = {}
-            cluster_map[dim_label] = clusters
-        result[dim_label][cat] = result[dim_label].get(cat, 0) + n
-
-    return result, cluster_map
+    result = {}
+    for stil, korr, n in rows:
+        result.setdefault(stil, {})[korr] = n
+    return result
 
 
 KORR_ORDER = ["Ja", "Nej", "Ukendt"]
 KORR_COLORS = {"Ja": "#901a1e", "Nej": "#122947", "Ukendt": "#666666"}
 KORR_LABELS = {"Ja": "Korresponderende forfatter", "Nej": "Ikke korresponderende", "Ukendt": "Ukendt"}
 
-
-def _render_korr_section(filters, mode, chart_mode="antal"):
-    data, cluster_map = _query_korr_by_stil(filters, mode)
+def _render_korr_section(filters, chart_mode="antal"):
+    data = _query_korr_by_stil(filters)
     if not any(data.values()):
         st.error("Ingen forfattere matcher de valgte filtre.")
         return
 
-    y_labels = list(data.keys())
-    if any(v is not None for v in cluster_map.values()):
-        group_keys = [cluster_map.get(lbl, "__single__") for lbl in y_labels]
-    else:
-        group_keys = None
-
+    _unit_label = _current_unit_label(filters)
     fig = fig_hbar_stacked(
         data=data, order=KORR_ORDER, colors=KORR_COLORS, labels=KORR_LABELS,
-        title=f"Korresponderende forfatterskaber pr. stillingsgruppe, {breakdown_label(mode)}, {year_range_label(filters['aar_fra'], filters['aar_til'])}",
+        title=f"Korresponderende forfatterskaber pr. stillingsgruppe, {_unit_label}",
         xaxis_title="Antal forfatterskaber", mode=chart_mode,
-        group_keys=group_keys, legend_position="right",
+        legend_position="right",
         hover_unit="forfatterskaber",
     )
     st.plotly_chart(fig, width="stretch", config=PLOTLY_CONFIG)
     render_table_export(
-        data=data, row_label="Enhed", col_labels=KORR_LABELS,
-        filename=f"korr_stillingsgruppe_{mode}_{chart_mode}.xlsx",
+        data=data, row_label="Stillingsgruppe", col_labels=KORR_LABELS,
+        filename=f"korr_stillingsgruppe_{chart_mode}.xlsx",
         sheet_name="Korr pr. stillingsgruppe",
-        key=f"export_korr_stillingsgruppe_{mode}_{chart_mode}",
+        key=f"export_korr_stillingsgruppe_{chart_mode}",
     )
 
 def _render_section(filters, mode, category_sql, title_prefix, order=None, colors=None, labels=None,
@@ -605,8 +590,13 @@ alene - en publikation kan tælle med under flere stillingsgrupper på én gang.
             count_col="PURE_ID", xaxis_title="Antal publikationer", pct_denominators=_stil_pub_totals,
         )
     
+    _korr_unit_label = _current_unit_label(filters)
+    _korr_unit_ku = (
+        "Da ingen specifikke enheder er valgt i sidepanelet, viser figuren nedenfor korresponderende forfatterskaber på tværs af **hele KU**."
+        if _korr_unit_label == "KU samlet" else ""
+    )
     st.markdown(
-"""
+f"""
 ---
 
 #### Korresponderende forfatterskaber pr. stillingsgruppe
@@ -614,24 +604,26 @@ alene - en publikation kan tælle med under flere stillingsgrupper på én gang.
 **Metrikken her er forfatterskaber, ikke forfattere eller publikationer**: hver optælling er
 én persons rolle på én bestemt publikation. 
 
-**Eksempel**: har én person bidraget til pre publikationer, tæller vedkommende med ét forfatterskab per publikation -
+**Eksempel**: har én person bidraget til tre publikationer, tæller vedkommende med ét forfatterskab per publikation -
 altså, tre forfatterskaber i alt, ikke én. 
 
 Andelen af forfatterskaber, hvor personen er registreret som korresponderende forfatter,
-er en indikator for forskningsledelse, ikke kun medforfatterskab. Brydes ned på de
-organisatoriske niveauer valgt i sidepanelet (fakultet/institut), med stillingsgruppe
-som det fineste niveau.
+er en indikator for forskningsledelse, ikke kun medforfatterskab. {_korr_unit_ku}
 """)
     _tab_korr_n, _tab_korr_p = st.tabs(["Antal", "Andel (%)"])
     with _tab_korr_n:
-        _render_korr_section(filters, _stil_mode, chart_mode="antal")
+        _render_korr_section(filters, chart_mode="antal")
     with _tab_korr_p:
-        _render_korr_section(filters, _stil_mode, chart_mode="pct")
+        _render_korr_section(filters, chart_mode="pct")
     
-
+    _stil_trend_label = _current_unit_label(filters)
+    _stil_trend_note = (
+        "Da ingen enheder er valgt i sidepanelet, dækker figurene nedenfor **hele KU**."
+        if _stil_trend_label == "KU samlet" else ""    
+    )
 
     st.markdown(
-"""
+f"""
 ---
 
 #### Udvikling over tid
@@ -644,7 +636,9 @@ antal ansatte.
 
 Graferne viser altid hele den tilgængelige periode, uanset sidepanelets
 valgte årsinterval - øvrige filtre gælder stadig. Er intet valgt i sidepanelet, dækker 
-graferne hele KU; er f.eks. kun HUM valgt, viser graferne udelukkende udviklingen for HUM. 
+graferne hele KU; er f.eks. kun HUM valgt, viser graferne udelukkende udviklingen for HUM.
+
+{_stil_trend_note}
 """)
     _tab_trend_forf, _tab_trend_pub, _tab_trend_korr = st.tabs(
         ["Forfattere", "Publikationer", "Korresponderende forfatterskaber"]
