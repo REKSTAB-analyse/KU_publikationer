@@ -96,6 +96,24 @@ def _build_y_positions(y_labels: list, group_keys: list) -> tuple:
     
     return positions, positions, y_labels
 
+def grouped_bar_offsets(n: int, span: float = _INTRA_GAP, fill: float = 0.85, pad: float = 0.85) -> tuple:
+    """
+    Manuelle y-offsets + søjlebredde til n side-om-side søjler i én række.
+    Bruges i stedet for Plotlys barmode='group', som regner dodge-bredden ud
+    fra den mindste afstand mellem ALLE delte y-værdier på tværs af traces -
+    hvilket bliver forkert når rækkerne (som i _build_y_positions) ikke ligger
+    1.0 fra hinanden, men fx _INTRA_GAP=0.6. Klyngningen fra
+    _build_y_positions/_INTRA_GAP/_INTER_GAP påvirkes slet ikke af dette.
+
+    span: hvor meget af rækkeafstanden klyngen af søjler må fylde.
+    fill: andel af 'span' der bruges til selve klyngen (resten = luft mellem rækker).
+    pad:  andel af hver søjles "plads" søjlen selv fylder (resten = luft mellem søjler).
+    """
+    slot = (span * fill) / n
+    offsets = [(i - (n - 1) / 2) * slot for i in range(n)]
+    bar_width = slot * pad
+    return offsets, bar_width
+
 def fig_hbar_stacked(
     data: dict,
     order: list = None,
