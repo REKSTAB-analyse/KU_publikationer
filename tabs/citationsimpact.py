@@ -306,12 +306,14 @@ def _render_fwci_trend(filters):
         )
         return
 
+    _line_color = "#666666" if show_ku_samlet(filters) else "#901a1e"
+
     fig = go.Figure()
     fig.add_trace(go.Scatter(
         x=shown_years,
         y=[trend_data[y]["fwci"] for y in shown_years],
         mode="lines+markers",
-        line=dict(color="#901a1e", width=2.5),
+        line=dict(color=_line_color, width=2.5),
         marker=dict(size=6),
         customdata=[trend_data[y]["n"] for y in shown_years],
         hovertemplate="<b>%{x}</b><br>Gennemsnitlig FWCI: %{y:.2f}<br>Baseret på %{customdata:,} publikationer<extra></extra>",
