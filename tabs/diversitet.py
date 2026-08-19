@@ -224,7 +224,8 @@ def _query_statsbg(filters, mode, count_col="ext_id"):
 
     if count_col == "ext_id":
         group_by = ", ".join(str(i) for i in range(1, n_dims + 2)) if dims else "1"
-        sql = f"SELECT {select_dims}Statsbg, COUNT(DISTINCT ext_id) AS n FROM pubs {where_sql} GROUP BY {group_by}"
+        order_by_sql = ", ".join(str(i) for i in range(1, n_dims + 1)) if dims else "1"
+        sql = f"SELECT {select_dims}Statsbg, COUNT(DISTINCT ext_id) AS n FROM pubs {where_sql} GROUP BY {group_by} ORDER BY {order_by_sql}"
         rows = get_cursor().execute(sql, params).fetchall()
 
         result, cluster_map = {}, {}
@@ -251,7 +252,8 @@ def _query_statsbg(filters, mode, count_col="ext_id"):
         return result, cluster_map
 
     else:  # count_col == "PURE_ID"
-        sql = f"SELECT {select_dims}Statsbg, PURE_ID FROM pubs {where_sql}"
+        order_by_sql = ", ".join(str(i) for i in range(1, n_dims + 1)) if dims else "1"
+        sql = f"SELECT {select_dims}Statsbg, PURE_ID FROM pubs {where_sql} ORDER BY {order_by_sql}"
         rows = get_cursor().execute(sql, params).fetchall()
 
         pub_sets, cluster_map = {}, {}
@@ -302,8 +304,8 @@ def _query_statsbg_forfatterskaber(filters, mode):
     n_dims = len(dims)
     select_dims = (", ".join(f"{col} AS dim_{i}" for i, col in enumerate(dims)) + ", ") if dims else ""
     group_by = ", ".join(str(i) for i in range(1, n_dims + 2)) if dims else "1"
-
-    sql = f"SELECT {select_dims}Statsbg, COUNT(*) AS n FROM pubs {where_sql} GROUP BY {group_by}"
+    order_by_sql = ", ".join(str(i) for i in range(1, n_dims + 1)) if dims else "1"
+    sql = f"SELECT {select_dims}Statsbg, COUNT(*) AS n FROM pubs {where_sql} GROUP BY {group_by} ORDER BY {order_by_sql}"
     rows = get_cursor().execute(sql, params).fetchall()
 
     result = {}
@@ -1293,8 +1295,14 @@ def render(filters: dict) -> None:
 
     st.markdown(
 f"""
-Fanen belyser den demografiske sammensætning af KU's publicerende forfattere - køn og 
-statsborgerskab - fordelt på organisatoriske niveauer og over tid. 
+Fanen belyser den demografiske sammensætning af KU's publicerende forfattere, opdelt i 
+to selvstændige afsnit: 
+
+- **Køn** - bestemt ud fra CPR-nummer, se metodenote nedenfor
+- **Statsborgerskab** - grupperet i regioner, dog med Danmark som sin egen kategori
+
+Begge afsnit følger samme opbygning: en fordeling, en krydsning med stillingsgruppe, 
+en publikationsbaseret variant og udvikling over tid. 
 
 Enheder, hvor mindst én kategori har **færre end {MIN_CELLE}** repræsenterede, vises ikke - hverken
 i graferne eller i eksport-tabellerne.
@@ -1332,15 +1340,23 @@ forfattere** der er af hvert køn.
 
 
     # --- Kønsfordeling pr. stillingsgruppe ---
+    _koen_stil_unit_label = _current_unit_label(filters)
+    _koen_stil_ku_note = (
+        " Ingen specifikke enheder er valgt i sidepanelet - og figuren nedenfor viser kønsfordelingen pr. stillingsgruppe på tværs af **hele KU**."
+        if _koen_stil_unit_label == "KU samlet" else ""
+    )
+
     st.markdown("---")
     st.markdown(
-"""
+f"""
 ##### Kønsfordeling pr. stillingsgruppe
 
 Krydser kønsfordelingen med stillingsgruppe - gør det muligt at se, om kønsbalancen ændrer
 sig hen over karrieretrin (f.eks. fra ph.d. til professor), i stedet for kun et samlet
 KU-gennemsnit, der kan skjule den slags mønstre. Viser altid det aktuelt valgte
-fakultet/institut-udsnit samlet, ikke yderligere opdelt pr. enhed.
+fakultet/institut-udsnit samlet, ikke yderligere opdelt pr. enhed. 
+
+{_koen_stil_ku_note}
 """
     )
     _koen_stil_data_raw = _query_koen_pr_stil(filters)
@@ -1427,6 +1443,12 @@ Antal **forfatterskaber** for det pågældende køn, divideret med antal forfatt
         _render_koen_rate(filters, _mode, taeller="forfatterskaber", min_celle=MIN_CELLE)
 
     # --- Kønsfordeling over tid ---
+    _koen_rate_unit_label = _current_unit_label(filters)
+    _koen_rate_ku_note = (
+        "Siden ingen enheder er valgt i sidepanelet, dækker graferne nedenfor **hele KU**."
+        if _koen_rate_unit_label == "KU samlet" else "" 
+    )
+
     st.markdown("---")
     st.markdown(
 f"""
@@ -1439,6 +1461,8 @@ KU; er f.eks. kun HUM valgt, viser graferne udelukkende udviklingen for HUM.
 **Bemærk:** enkelte år kan mangle i en linje, hvis mindst ét køn det år havde færre end
 {MIN_CELLE} repræsenterede - resten af perioden vises stadig. Brug derfor linjernes overordnede 
 tendens, ikke enkeltårs absolutte tal, til at vurdere udviklingen. 
+
+{_koen_rate_ku_note}
 """
     )
     (_tab_trend_kf, _tab_trend_ks, _tab_trend_pk,
@@ -1458,10 +1482,13 @@ tendens, ikke enkeltårs absolutte tal, til at vurdere udviklingen.
         _render_koen_rate_trend(filters, taeller="forfatterskaber", min_celle=MIN_CELLE)
 
     # --- Statsborgerskab (endnu ikke bygget) ---
-    st.markdown("### Statsborgerskab")
     st.markdown(
 """
-Fordelingen af KU's publicerende forfattere på statsborgerskab, grupperet efter **region**,
+---
+
+### Statsborgerskab 
+
+Fordelingen af KU's publicerende forfattere på statsborgerskab er grupperet efter **region**,
 som de er definerede i Tableaus personalesammensætning, frem for enkelte lande. 
 Danmark vises som sin egen kategori, adskilt fra resten af Europa.
 
@@ -1482,14 +1509,21 @@ ikke nødvendigvis af 15 % af SUND's samlede ansatte.
     with _tab_sb_p:
         _render_statsbg_section(filters, _mode, chart_mode="pct", min_celle=MIN_CELLE)
 
+    _statsbg_stil_label = _current_unit_label(filters)
+    _statsbg_stil_note = (
+        " Siden ingen enheder er valgt i sidepanelet, vises figuren nedenfor for **hele KU**."
+        if _statsbg_stil_label == "KU samlet" else ""
+    )
     st.markdown("---")
     st.markdown(
-"""
+f"""
 ##### Statsborgerskab pr. stillingsgruppe
 
 Krydser statsborgerskabsfordelingen med stillingsgruppe - samme princip som
 Kønsfordeling pr. stillingsgruppe ovenfor. Viser altid det aktuelt valgte
 fakultet/institut-udsnit samlet, ikke yderligere opdelt pr. enhed.
+
+{_statsbg_stil_note}
 """
     )
     _statsbg_stil_data_raw = _query_statsbg_pr_stil(filters)
@@ -1568,6 +1602,12 @@ forfattere regionen har totalt.
     with _tab_psb_r_fs:
         _render_statsbg_rate(filters, _mode, taeller="forfatterskaber", min_celle=MIN_CELLE)
 
+    _statsbg_trend_label = _current_unit_label(filters)
+    _statsbg_trend_note = (
+        "Figurene nedenfor vises for **hele KU**, da ingen specifikke enheder er valgt i sidepanelet."
+        if _statsbg_trend_label == "KU samlet" else ""
+    )
+
     st.markdown("---")
     st.markdown(
 f"""
@@ -1581,6 +1621,8 @@ rate-faner), nu vist som udvikling over tid i stedet for et enkelt øjebliksbill
 **Bemærk:** enkelte år kan mangle i en linje, hvis mindst én region det år havde færre end
 {MIN_CELLE} repræsenterede - resten af perioden vises stadig. Brug derfor linjernes
 overordnede tendens, ikke enkeltårs absolutte tal, til at vurdere udviklingen.
+
+{_statsbg_stil_note}
 """
     )
     (_tab_sbt_f, _tab_sbt_p, _tab_sbt_r_pub, _tab_sbt_r_fs) = st.tabs([
