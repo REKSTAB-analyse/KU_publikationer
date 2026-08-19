@@ -472,17 +472,17 @@ def _render_intra_inter_by_unit(filters, metric, niveau, alle_publikationer=Fals
                     hover_n.append(n)
                 fig.add_trace(go.Scatter(
                     x=years_sorted, y=y_vals, mode="lines+markers",
-                    name=f"{unit} ({'internt' if klasse == 'intra' else 'på tværs'})",
+                    name=f"{unit} ({'intra' if klasse == 'intra' else 'inter'})",
                     line=dict(color=colors.get(unit, "#666666"), dash=dash, width=2.5 if unit == "KU samlet" else 2),
                     marker=dict(size=5),
                     customdata=list(zip(pct_vals, hover_n)),
                     hovertemplate=(
-                        f"<b>{unit} ({'internt' if klasse=='intra' else 'på tværs'})</b><br>%{{x}}<br>"
+                        f"<b>{unit} ({'intra' if klasse=='intra' else 'inter'})</b><br>%{{x}}<br>"
                         f"%{{customdata[0]:.1f}}%<br>%{{customdata[1]:,}} {metric}<extra></extra>"
                     ),
                 ))
         fig.update_layout(
-            title=dict(text=f"Internt vs. på tværs, pr. enhed ({metric})", font=dict(size=14)),
+            title=dict(text=f"Intra vs. inter, pr. enhed ({metric})", font=dict(size=14)),
             xaxis=dict(title="Udgivelsesår", dtick=1),
             yaxis=dict(title="Andel (%)" if chart_mode == "pct" else "Antal", range=[0, 100] if chart_mode == "pct" else None),
             plot_bgcolor="white", height=460,
@@ -512,7 +512,7 @@ def _render_intra_inter_by_unit(filters, metric, niveau, alle_publikationer=Fals
 
 _KLASSE_ORDER = ["intra", "inter"]
 _KLASSE_COLORS = {"intra": "#122947", "inter": "#901a1e"}
-_KLASSE_LABELS = {"intra": "Internt", "inter": "På tværs"}
+_KLASSE_LABELS = {"intra": "Intra", "inter": "Inter"}
 
 def _render_intra_inter_trend(filters, metric, niveau):
     trend_data = _query_intra_inter_trend(filters, metric, niveau)
@@ -526,7 +526,7 @@ def _render_intra_inter_trend(filters, metric, niveau):
     with _tab_antal:
         fig = fig_year_trend(
             trend_data, order=_KLASSE_ORDER, colors=_KLASSE_COLORS, labels=_KLASSE_LABELS,
-            title=f"Internt vs. på tværs af {niveau_navn} over tid ({metric})",
+            title=f"Intra vs. inter af {niveau_navn} over tid ({metric})",
             mode="antal", hover_unit=metric,
         )
         st.plotly_chart(fig, width="stretch", config=PLOTLY_CONFIG)
@@ -541,7 +541,7 @@ def _render_intra_inter_trend(filters, metric, niveau):
     with _tab_pct:
         fig = fig_year_trend(
             trend_data, order=_KLASSE_ORDER, colors=_KLASSE_COLORS, labels=_KLASSE_LABELS,
-            title=f"Internt vs. på tværs af {niveau_navn} over tid ({metric})",
+            title=f"Intra vs. inter af {niveau_navn} over tid ({metric})",
             mode="pct", hover_unit=metric,
         )
         st.plotly_chart(fig, width="stretch", config=PLOTLY_CONFIG)
@@ -559,9 +559,9 @@ def render(filters: dict) -> None:
     st.markdown(
 """
 Fanen viser KU's interne sampubliceringsmønstre - hvor meget forskere fra forskellige
-organisatoriske enheder skriver sammen, og hvor meget samarbejdet foregår internt i egen
-enhed versus på tværs. Kun **interne** medforfattere indgår; eksternt samarbejde med
-ikke-KU-parter dækkes i stedet af fanen **Eksternt samarbejde**.
+organisatoriske enheder skriver sammen, og hvor meget samarbejdet foregår inden for egen
+enhed (*intra*) versus på tværs af enheder (*inter*). Kun **interne** medforfattere indgår; 
+eksternt samarbejde med ikke-KU-parter dækkes i stedet af fanen **Eksternt samarbejde**. 
 
 Vælges OpenAlex eller SciVal som datakilde i sidepanelet, indgår kun de publikationer, der
 er fundet i den pågældende datakilde - samme afgrænsning som resten af appens faner.
@@ -578,7 +578,7 @@ er fundet i den pågældende datakilde - samme afgrænsning som resten af appens
         st.markdown(
 """
 **Forfatterpar** tæller hver unik kombination af to interne medforfattere på samme
-publikation. En publikation med **n** interne forfattere bidrager med n(n-1)/2 par -
+publikation. En publikation med *n* interne forfattere bidrager med n(n-1)/2 par -
 en artikel med mange forfattere vejer derfor tungere i denne metrik end en med få. 
 Publikationer med kun én intern forfatter bidrager per definition med **0** par, og indgår
 derfor ikke i denne metrik. 
@@ -616,7 +616,8 @@ konsortium-artikler vejer tungere end små.
 ##### Internt samarbejde
 
 Internt samarbejder dækker over publikationer med mindst to interne forfattere - uanset organisatorisk
-tilknytning. Modstykket er 'solo', som er publikationer med kun én intern forfatter.  
+tilknytning. Modstykket er 'solo', som er publikationer med kun én intern forfatter. Det implicerer altså, 
+at publikationer med én KU-forfatter og desuden eksterne forfattere indgår i solo publikationerne. 
 
 Er specifikke enheder valgt i sidepanelet, vises ét linjepar pr. valgt enhed. 
 
@@ -649,15 +650,16 @@ hvor stor en del der har SAMF-forfatteren som eneste interne forfatter.
 """
 ##### Fakultet
 
-Er specifikke fakulteter valgt i sidepanelet, vises ét linjepar pr. valgt fakultet. Er
+I det her afsnit fokuserer figuren på samarbejde, der krydser fakultetsgrænserne. 
+**Intra** er her samarbejde inden for samme fakultet, mens **inter** er samarbejde på tværs af to
+fakulteter.  
+
+Er specifikke fakulteter valgt i sidepanelet, vises ét linjepar pr. valgt fakultet. Er der
 i stedet kun specifikke institutter valgt (uden noget fakultet), vises ét linjepar pr.
 valgt institut - men stadig med fakultet-niveauets intra/inter-opdeling, altså hvor stor
 en andel af det pågældende instituts samarbejde der krydser fakultetsgrænser. Er hverken
 fakultet eller institut valgt, vises i stedet ét linjepar for 'KU samlet'.
 
-Hvert linjepar viser to ting: hvor meget af enhedens arbejde der foregår **internt** på
-fakultetet (stiplet) linje, og hvor meget der går **på tværs** til andre fakulteter 
-(optrukket linje).
 """
     )
     _render_intra_inter_by_unit(filters, _metric_arg, "fak", alle_publikationer=_alle_pub)
@@ -667,16 +669,15 @@ fakultetet (stiplet) linje, og hvor meget der går **på tværs** til andre faku
     st.markdown(
 """##### Institut
 
+Figuren nedenfor viser samarbejde på tværs af institutgrænserne. **Intra** er samarbejde inden for samme
+institut, mens **inter** er samarbejde på tværs af institutter. 
+
 Er specifikke institutter valgt i sidepanelet, vises ét linjepar pr. institut. Er
 ingen institutter valgt, falder figuren i stedet tilbage til at vise fakulteter - men 
 stadig med institutniveauets intra/inter-opdeling. 
 
 **Eksempel**: vælger du 'SAMF', viser linjeparret dermed, hvor stor en andel af **hele SAMF's**
 samarbejde der foregår inden for samme institut, versus på tværs af institutter. 
-
-Hvert linjepar viser to ting: hvor meget af enhendes samarbejde der foregår **internt** på
-institutter (stiplet linje), og hvor meget der går **på tværs** til andre institutter, 
-uanset om det andet institut hører under samme fakultet (optrukket linje). 
 """
     )
     _render_intra_inter_by_unit(filters, _metric_arg, "inst", alle_publikationer=_alle_pub)
@@ -685,22 +686,24 @@ uanset om det andet institut hører under samme fakultet (optrukket linje).
     st.markdown(
 """##### Stillingsgruppe
 
+Figuren nedenfor viser samarbejde på tværs af stillingsgrupper. **Intra** viser samarbejde inden for samme
+stillingsgruppe, mens **inter** viser samarbejde på tværs af stillingsgrupper. 
+
 Er specifikke stillingsgrupper valgt i sidepanelet, vises ét linjepar pr. valgt stillingsgruppe. 
 Er ingen valgt, falder figuren tilbage til institut eller fakultet - og til 'KU samlet',
 hvis intet af det heller er valgt. 
 
 **Bemærk**: uanset hvilken enhed, der vises, er selve intra/inter her altid baseret på 
 **stillingsgruppe**, ikke organisatorisk tilhørsforhold - det ændrer sig ikke, selvom 
-enheden skifter. 'Internt' betyder, at de to forfattere i et par har **samme**
-stillingsgruppe, og 'på tværs' betyder **forskellig** stillingsgruppe. 
+enheden skifter. 
 
 **Eksempel**: er 'Professor' valgt i sidepanelet, viser linjeparret, hvor stor en andel af 
-professors samarbejde der er med **andre professorer** (internt), versus med forskere
-i **andre stillingsgrupper**, f.eks. en adjunkt eller postdov (på tværs). 
+professors samarbejde der er med **andre professorer** (intra), versus med forskere
+i **andre stillingsgrupper**, f.eks. en adjunkt eller postdov (inter). 
 
 **Eksempel**: er 'SAMF' valgt (ingen specifik stillingsgruppe), vises hvor stor en andel af 
-SAMF's samlede samarbejde, der foregår **inden for samme stillingsgruppe** versus 
-**på tværs af stillingsgrupper**. 
+SAMF's samlede samarbejde, der foregår **inden for samme stillingsgruppe** (intra) versus 
+**på tværs af stillingsgrupper** (inter).  
 
 Begge eksempler ovenfor kan selvfølgelig kombineres. 
 """
