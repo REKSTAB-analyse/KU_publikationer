@@ -1,4 +1,3 @@
-from GitHub.tabs.diversitet import _current_unit_label
 import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -7,6 +6,7 @@ from data.loader import get_cursor, load_author_counts
 from components.charts import fig_country_choropleth, fig_hbar_stacked, PLOTLY_CONFIG, land_label_da, fig_year_trend
 from components.export import render_table_export
 from components.colors import ku_color_sequence
+from tabs.diversitet import _current_unit_label
 from config import doi_filter_sql, year_range_label, hier_cols, breakdown_label, author_count_filter, show_ku_samlet
 import re
 
