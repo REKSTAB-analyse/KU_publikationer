@@ -583,7 +583,7 @@ en artikel med mange forfattere vejer derfor tungere i denne metrik end en med f
 Publikationer med kun én intern forfatter bidrager per definition med **0** par, og indgår
 derfor ikke i denne metrik. 
 
-**Eksempel**: en publikation med 5 interne medforfattere fra forskellige institutter
+**Eksempel**: En publikation med 5 interne medforfattere fra forskellige institutter
 bidrager med 10 forfatterpar til netværket - langt mere end en 2-forfatter-artikel, selvom
 begge kun er **én** publikation. Forfatterpar er derfor det rette valg, hvis spørgsmålet er
 *"hvor meget parvis samarbejdsaktivitet foregår der?"*
@@ -598,7 +598,7 @@ har **mindst ét** forfatterpar, der krydser den valgte organisatoriske grænse 
 fakultet) - ellers som **intra**. Publikationer med kun én intern forfatter kan hverken være intra
 eller intra - se **Internt samarbejde nedenfor** for hvordan de indgår. 
 
-**Eksempel**: en publikation med 5 interne medforfattere, hvoraf blot to kommer fra
+**Eksempel**: En publikation med 5 interne medforfattere, hvoraf blot to kommer fra
 forskellige fakulteter, tæller som **én** tværgående publikation - uanset at de øvrige
 8 forfatterpar er interne. Publikationer er derfor det rette valg, hvis spørgsmålet er
 *"hvor mange konkrete publikationer involverer tværgående samarbejde?"*, uden at store
@@ -615,13 +615,13 @@ konsortium-artikler vejer tungere end små.
 """
 ##### Internt samarbejde
 
-Internt samarbejder dækker over publikationer med mindst to interne forfattere - uanset organisatorisk
+Internt samarbejde dækker over publikationer med mindst to interne forfattere - uanset organisatorisk
 tilknytning. Modstykket er 'solo', som er publikationer med kun én intern forfatter. Det implicerer altså, 
 at publikationer med én KU-forfatter og desuden eksterne forfattere indgår i solo publikationerne. 
 
 Er specifikke enheder valgt i sidepanelet, vises ét linjepar pr. valgt enhed. 
 
-**Eksempel**: vælges 'SAMF' i sidepanelet, viser linjeparret, hvor stor en andel af SAMF's publikationer
+**Eksempel**: Vælges 'SAMF' i sidepanelet, viser linjeparret, hvor stor en andel af SAMF's publikationer
 der har **mindst to** KU-forfattere (uanset om de begge er fra SAMF), versus
 hvor stor en del der har SAMF-forfatteren som eneste interne forfatter. 
 """
@@ -655,7 +655,7 @@ I det her afsnit fokuserer figuren på samarbejde, der krydser fakultetsgrænser
 fakulteter.  
 
 Er specifikke fakulteter valgt i sidepanelet, vises ét linjepar pr. valgt fakultet. Er der
-i stedet kun specifikke institutter valgt (uden noget fakultet), vises ét linjepar pr.
+i stedet kun valgt specifikke institutter valgt (uden noget fakultet), vises ét linjepar pr.
 valgt institut - men stadig med fakultet-niveauets intra/inter-opdeling, altså hvor stor
 en andel af det pågældende instituts samarbejde der krydser fakultetsgrænser. Er hverken
 fakultet eller institut valgt, vises i stedet ét linjepar for 'KU samlet'.
@@ -676,7 +676,7 @@ Er specifikke institutter valgt i sidepanelet, vises ét linjepar pr. institut. 
 ingen institutter valgt, falder figuren i stedet tilbage til at vise fakulteter - men 
 stadig med institutniveauets intra/inter-opdeling. 
 
-**Eksempel**: vælger du 'SAMF', viser linjeparret dermed, hvor stor en andel af **hele SAMF's**
+**Eksempel**: Vælger du 'SAMF', viser linjeparret dermed, hvor stor en andel af **hele SAMF's**
 samarbejde der foregår inden for samme institut, versus på tværs af institutter. 
 """
     )
@@ -697,11 +697,11 @@ hvis intet af det heller er valgt.
 **stillingsgruppe**, ikke organisatorisk tilhørsforhold - det ændrer sig ikke, selvom 
 enheden skifter. 
 
-**Eksempel**: er 'Professor' valgt i sidepanelet, viser linjeparret, hvor stor en andel af 
+**Eksempel**: Er 'Professor' valgt i sidepanelet, viser linjeparret, hvor stor en andel af 
 professors samarbejde der er med **andre professorer** (intra), versus med forskere
-i **andre stillingsgrupper**, f.eks. en adjunkt eller postdov (inter). 
+i **andre stillingsgrupper**, f.eks. en adjunkt eller postdoc (inter). 
 
-**Eksempel**: er 'SAMF' valgt (ingen specifik stillingsgruppe), vises hvor stor en andel af 
+**Eksempel**: Er 'SAMF' valgt (ingen specifik stillingsgruppe), viser figuren, hvor stor en andel af 
 SAMF's samlede samarbejde, der foregår **inden for samme stillingsgruppe** (intra) versus 
 **på tværs af stillingsgrupper** (inter).  
 

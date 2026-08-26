@@ -941,7 +941,7 @@ De fire hovedområder er:
 tildeles sit hovedområde ud fra **førsteforfatterens** organisatoriske tilknytning - ikke 
 ud fra publikationens faktiske emne, og ikke ud fra en samlet vurdering af alle medforfattere.
 
-**Eksempel**: skriver en kemiker ('Tecnical/natural sciences') en artikel sammen med to 
+**Eksempel**: Skriver en kemiker ('Tecnical/natural sciences') en artikel sammen med to 
 forfattere fra Biomedicinsk Institut ('Health sciences'), bliver hele publikationen 
 tildelt **'Technical/natural sciences'**, selvom det faglige indhold måske ligger tættere 
 på 'Health sciences' - udelukkende fordi kemikeren er førsteforfatter. Havde forfatterrækkefølgen
@@ -1011,16 +1011,16 @@ Hvert emne hører entydigt til ét underfelt, ét felt og ét domæne, så hiera
 er altid strengt uden overlap. En publikation kan få tildelt flere topics med hver
 sin score; det højest scorende bliver publikationens primære emne. 
 
-**Eksempel**: emnet *International Maritime Law Issues* hører under underfeltet
+**Eksempel**: Emnet *International Maritime Law Issues* hører under underfeltet
 *Management, Monitoring, Policy, and Law*, feltet *Environmental Science* og 
 domænet *Physical Sciences*. ([CNRS' OpenAlex-brugerguide](https://www.science-ouverte.cnrs.fr/wp-content/uploads/2026/02/20260209_OpenAlex_Discovery-User-Guide_CNRS_2026.pdf))
 
 **Sådan bygges og tildeles emnerne**
 
 Selve emnetaksonomien (de 4500 kategorier) er bygget ud fra 71 millioner
-OpenAlex-publikationer udgivet 2000-2023, forbundet af 1.7 milliarder citationslinks. 
+OpenAlex-publikationer udgivet 2000-2023 og forbundet af 1.7 milliarder citationslinks. 
 Klyngedannelsen bygger udelukkende på disse citationsforbindelser - ikke på 
-abstracts eller en sprogmodel. Først bagefter fik hver klynge et navn ved
+abstracts eller en sprogmodel. Senere har hver klynge fået et navn ved
 brug af en sprogmodel, som kun så titlerne på de 250 mest citerede publikationer
 i hver klynge. ([Analyse af navngivningstrinnet](https://arxiv.org/pdf/2510.14303))
 
@@ -1237,7 +1237,7 @@ tidsskrift ud fra dets formål og indhold, når det optaget i Scopus.
 ([Scopus subject area categories and ASJC codes](https://service.elsevier.com/app/answers/detail/a_id/12007/supporthub/scopus/))
 
 Den afgørende forskel til Topics: ASJC klassificerer hele tidsskriftet, ikke den 
-enkelte artikle. Alle artikler i samme tidsskrift får dermed samme ASJC-kode(r), 
+enkelte artikel. Alle artikler i samme tidsskrift får dermed samme ASJC-kode(r), 
 uanset hvad den konkrete artikel faktisk handler om - modsat Topics, der er 
 publikationsspecifikke og opdateres dynamisk ud fra artiklens egne referencer. 
 Et tidsskrift kan desuden have flere ASJC-koder, hvis det dækker flere
@@ -1377,7 +1377,7 @@ for at zoome ind på dens hovedfelter, og videre ned til specifikke kategorier. 
 med under **flere** fagområder/felter/kategorier samtidig, hvis dens tidsskrift dækker mere end ét område -
 andelene på hvert niveau summerer derfor ikke nødvendigvis til 100%.
 
-**Eksempel**: har et tidsskrift ASJC-koder i både Health Sciences og Life Sciences, tæller en publikation heri
+**Eksempel**: Har et tidsskrift ASJC-koder i både Health Sciences og Life Sciences, tæller en publikation heri
 med i **begge** kategoriers andel - summen af Health Science (60 %) og Life Sciences (55 %) kan derfor sagtens
 overstige 100 %. 
 """

@@ -336,7 +336,7 @@ Hver figur kan ses på tre måder:
 i den organisatoriske enhed - et produktivitetsmål, der gør det muligt at sammenligne enheder af 
 meget forskellig størrelse. 
 
-**Eksempel**: et institut har 30 forfattere og 100 publikationer. Raten er da 100 / 40 = 2.5. 
+**Eksempel**: Et institut har 30 forfattere og 100 publikationer. Raten er da 100 / 40 = 2.5. 
 Et andet institut med 10 forfattere og 30 publikationer har en højere rate på 3.0, selvom
 det samlede antal publikationer er lavere. 
 
@@ -358,7 +358,7 @@ og bøger til konferencebidrag og rapporter. Fordelingen herunder er opgjort på
 de valgte organisatoriske niveauer og bygger på CURIS' egen registrering af
 publikationstype.
 
-**Eksempel**: en artikel i et internationalt tidsskrift registreres som 'Tidsskriftartikel', mens
+**Eksempel**: En artikel i et internationalt tidsskrift registreres som 'Tidsskriftartikel', mens
 den samme forskning præsenteret på en konference i stedet registreres som 'Konferencebidrag' - selv om
 det er samme underliggende resultat. 
 
@@ -564,7 +564,7 @@ Fordelingen herunder bygger på CURIS' registrering og er opgjort på tværs af 
 organisatoriske niveauer. **'Ukendt'** dækker publikationer, hvor Open Access-status endnu 
 ikke er registreret.
 
-**Eksempel**: en artikel, der er frit tilgængelig fra udgivelsesdatoen, registreres som 'Open'. 
+**Eksempel**: En artikel, der er frit tilgængelig fra udgivelsesdatoen, registreres som 'Open'. 
 En artikel med et forlagspålagt embargo på f.eks. 12 måneder registreres i stedet som 'Embargoed',
 indtil embargoperioden udløber. 
 """)

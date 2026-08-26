@@ -1307,7 +1307,7 @@ def render(filters: dict) -> None:
     st.markdown(
 f"""
 Fanen belyser den demografiske sammensætning af KU's publicerende forfattere, opdelt i 
-to selvstændige sektion, som vælges nedenfor: 
+to selvstændige sektioner, som vælges nedenfor: 
 
 - **Køn** - bestemt ud fra CPR-nummer, se metodenote nedenfor
 - **Statsborgerskab** - grupperet i regioner, dog med Danmark som sin egen kategori
@@ -1368,7 +1368,7 @@ forfattere** der er af hvert køn.
 f"""
 ##### Kønsfordeling pr. stillingsgruppe
 
-Krydser kønsfordelingen med stillingsgruppe - gør det muligt at se, om kønsbalancen ændrer
+Her krydser vi kønsfordelingen med stillingsgruppe - gør det muligt at se, om kønsbalancen ændrer
 sig hen over karrieretrin (f.eks. fra ph.d. til professor), i stedet for kun et samlet
 KU-gennemsnit, der kan skjule den slags mønstre. Viser altid det aktuelt valgte
 fakultet/institut-udsnit samlet, ikke yderligere opdelt pr. enhed. 
@@ -1411,10 +1411,10 @@ fakultet/institut-udsnit samlet, ikke yderligere opdelt pr. enhed.
 """
 ##### Publikationer pr. køn
 
-I modsætning til sektionerne ovenfor tæller denne **publikationer**, ikke personer: en
+I modsætning til sektionerne ovenfor tælles her **publikationer**, ikke personer: en
 publikation med forfattere af begge køn tælles med under **begge**.
 
-**Eksempel**: er kvinder med på 40 % af alle publikationer, betyder det ikke, at kvinder har
+**Eksempel**: Er kvinder med på 40 % af alle publikationer, betyder det ikke, at kvinder har
 skrevet de 40 % alene - en publikation kan tælle med under begge køn på én gang.
 
 **Gabet mellem de to sidste faner** ('Publikationer pr. forfatter' og 'Forfatterskaber
@@ -1475,7 +1475,7 @@ Graferne dækker altid **hele den tilgængelige periode**, uanset det valgte år
 sidepanelets øvrige filtre gælder stadig. Er intet valgt i sidepanelet, dækker graferne hele
 KU; er f.eks. kun HUM valgt, viser graferne udelukkende udviklingen for HUM. 
 
-**Bemærk:** enkelte år kan mangle i en linje, hvis mindst ét køn det år havde færre end
+**Bemærk:** Enkelte år kan mangle i en linje, hvis mindst ét køn det år havde færre end
 {MIN_CELLE} repræsenterede - resten af perioden vises stadig. Brug derfor linjernes overordnede 
 tendens, ikke enkeltårs absolutte tal, til at vurdere udviklingen. 
 
@@ -1507,8 +1507,7 @@ tendens, ikke enkeltårs absolutte tal, til at vurdere udviklingen.
 
 ### Statsborgerskab 
 
-Fordelingen af KU's publicerende forfattere på statsborgerskab er grupperet efter **region**,
-som de er definerede i Tableaus personalesammensætning, frem for enkelte lande. 
+Fordelingen af KU's publicerende forfattere på statsborgerskab er grupperet efter **region**, frem for enkelte lande. 
 Danmark vises som sin egen kategori, adskilt fra resten af Europa.
 
 ##### Statsborgerskabsfordeling
@@ -1517,9 +1516,8 @@ Fordelingen af KU's publicerede forfattere på statsborgerskab, opgjort på tvæ
 valgte organisatoriske niveauer. Andelen (%) angiver, hvor stor en del af enhedens
 **publicerende forfattere** der har statsborgerskab i den pågældende region. 
 
-**Eksempel**: er 15 % af SUND's forfattere kategoriseret under 'Asien', betyder det, at 
-af de persioner, der har publiceret fra SUND i perioden, har et asiatisk statsborgerskab, 
-ikke nødvendigvis af 15 % af SUND's samlede ansatte. 
+**Eksempel**: Er 15 % af SUND's forfattere kategoriseret under 'Asien', betyder det, at 
+15 % af de personer, der har publiceret fra SUND i perioden, har et asiatisk statsborgerskab. 
 """
         )
         _tab_sb_n, _tab_sb_p = st.tabs(["Antal", "Andel (%)"])
@@ -1598,7 +1596,7 @@ hver enkelt person selv har bidraget til.
 Er tallene tæt på hinanden, har forfattere fra regionen sjældent en anden forfatter fra
 **samme** region som medforfatter på samme artikel. Er gabet stort, sker det oftere. 
 
-**Eksempel**: har Danmark 3.15 publikationer pr. forfatter, men 5.46 forfatterskaber pr.
+**Eksempel**: Har Danmark 3.15 publikationer pr. forfatter, men 5.46 forfatterskaber pr.
 forfatter, betyder det relativt store gab, at danske forfattere ofte deler artikel med 
 **andre** danskere. Ligger de to tal tæt på hinanden for en anden region, betyder det 
 typisk, at hver artikel kun har **én** forfatter fra netop den region, uanset hvor mange

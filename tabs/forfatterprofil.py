@@ -515,7 +515,7 @@ de fordeler sig på stillingsgruppe og deres rolle i publiceringerne.
 
 Generelt tælles **unikke KU-ID'er blandt dem, der har mindst én publikation** i 
 den valgte periode: en forsker tæller med præcis én gang, uanset hvor mange publikationer de har i den 
-perioden. Det er altså et mål for, hvor mange **publicerende personer** der findes
+periode. Det er altså et mål for, hvor mange **publicerende personer** der findes
 i hvert stillingsgruppe, ikke hvor mange KU reelt har ansat - en forsker, der ikke har publiceret
 i perioden, indgår ikke i tallet, uanset ansættelsesforhold. 
 
@@ -533,10 +533,10 @@ Fordelingen af KU's forfattere på tværs af stillingsgrupper, fordelt på de va
 organisatoriske niveauer (fakultet/institut). Andelen (%) angiver, hvor stor en del af enhedens
 **publicerende forfattere** der tilhører hver stillingsgruppe.
 
-**Eksempel**: er 40 % af SUND's forfattere professorer, betyder det, at professorer udgør 40 % af de personer, 
-der har publiveret fra SUND i perioden - ikke 40 % af SUND's samlede stab. 
+**Eksempel**: Er 40 % af SUND's forfattere professorer, betyder det, at professorer udgør 40 % af de personer, 
+der har publiceret fra SUND i perioden - ikke 40 % af SUND's samlede stab. 
 
-**Bemærk ved flerårlige perioder**: en person, der har skiftet stillingsgruppe i den valgte periode, tælles med under
+**Bemærk ved flerårlige perioder**: En person, der har skiftet stillingsgruppe i den valgte periode, tælles med i
 **begge** grupper - andelene summerer defor ikke nødvendigvis til 100 %. Hver enkelt andel er stadig et gyldigt 
 udtryk for, hvor stor en del af de publicerende forfattere, der har haft den pågældende stillingsgruppe i perioden. 
 Med et enkelt år valgt vil andele altid summere til 100%. 
@@ -571,7 +571,7 @@ samme princip som resten af appens organisatoriske nedbrydninger.
 Andelen (%) angiver defor, hvor stor en del af enhedens publikationer der har **mindst én** forfatter
 fra den pågældende stillingsgruppe.
 
-**Eksempel**: er professorer med på 40 % af alle publikationer, betyder det ikke, at professorer har skrevet de 40 % 
+**Eksempel**: Er professorer med på 40 % af alle publikationer, betyder det ikke, at professorer har skrevet de 40 % 
 alene - en publikation kan tælle med under flere stillingsgrupper på én gang. 
 """)
 
@@ -601,10 +601,10 @@ f"""
 
 #### Korresponderende forfatterskaber pr. stillingsgruppe
 
-**Metrikken her er forfatterskaber, ikke forfattere eller publikationer**: hver optælling er
+Her fokuserer vi på **forfatterskaber, ikke forfattere eller publikationer**; hver optælling er
 én persons rolle på én bestemt publikation. 
 
-**Eksempel**: har én person bidraget til tre publikationer, tæller vedkommende med ét forfatterskab per publikation -
+**Eksempel**: Har én person bidraget til tre publikationer, tæller vedkommende med ét forfatterskab per publikation -
 altså, tre forfatterskaber i alt, ikke én. 
 
 Andelen af forfatterskaber, hvor personen er registreret som korresponderende forfatter,
@@ -630,7 +630,8 @@ f"""
 
 Hvordan har sammensætningen af KU's **publicerende** personale udviklet sig - målt på
 antal forfattere, antal publikationer eller andelen af korresponderende forfatterskaber?
-Bemærk: hvert år tæller kun det, der reelt er registreret i netop det år - et fald kan
+
+**Bemærk:** hvert år tæller kun det, der reelt er registreret i netop det år - et fald kan
 derfor lige så vel skyldes lavere publiceringsaktivitet det år som en reel ændring i
 antal ansatte. 
 

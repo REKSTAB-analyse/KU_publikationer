@@ -214,7 +214,7 @@ stillingsgruppe) - se afsnittet nedenfor for metode og begræsninger.
 #### HR-kobling
 
 Hver forfatters fakultet, institut og stillingsgruppe kommer ikke fra CURIS selv, men 
-kobles separat fra KU's personaledata (hentet fra Personalesammensætning på Tableauserveren).
+kobles separat fra KU's personaledata (hentet fra datakilden Personalesammensætning på tableau.ku.dk).
 Koblingen sker **år for år**: for en given publikation slås forfatterens organisatoriske tilknytning
 op, som den var registreret **31. december** i udgivelsesåret - ikke på selve
 udgivelsesdatoen, da data herfor mangler. 
@@ -225,7 +225,7 @@ udgivelsesdatoen, da data herfor mangler.
 udgivelsesåret, er det kun tilknytningen pr. 31. december, der indgår - uanset hvornår på året 
 publikationen faktisk udkom. 
 - **Indeværende år har endnu ingen HR-data**. Et års data kan først indhentes, efter 31. 
-decemver samme år er passeret. 
+december samme år er passeret. 
 
 ---
 
@@ -247,8 +247,8 @@ Sektionen viser, hvor stor en andel af CURIS's publikationer der har kunnet matc
 med en tilsvarende OpenAlex-post via DOI. OpenAlex kan - som nævnt ovenfor - pr. 
 konstruktion aldrig indeholde publikationer, CURIS ikke allerede har. 
 
-Grafen nedenfor respekterer sidepanelets valgte årsinterval, men ignorerer alle ævrige filtre 
-(fakultet/institu/stillingsgruppe/etc.). 
+Grafen nedenfor respekterer sidepanelets valgte årsinterval, men ignorerer alle øvrige filtre 
+(fakultet/institut/stillingsgruppe/etc.). 
 """)
 
     openalex_coverage = _query_source_coverage("OpenAlex", filters['aar_fra'], filters['aar_til'])

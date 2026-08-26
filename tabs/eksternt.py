@@ -639,7 +639,7 @@ opgjort på publikationer med mindst én ekstern medforfatter. Eksternt samarbej
 for forskningens rækkevidde og kan indgå i strategiske vurderinger af, hvor godt et fakultet
 eller institut er forankret i det internationale forskningslandskab. 
 
-Oversigten viser de vigtigste samarbejdslande og den organisatotiske fordeling af KU's eksterne netværk. 
+Oversigten viser de vigtigste samarbejdslande og den organisatoriske fordeling af KU's eksterne netværk. 
 Fanen bygger for nu udelukkende på CURIS' registrering af medforfatteres landetilknytning; at 
 koble samarbejdet til specifikke institutiner via OpenAlex og SciVal er under udvikling. 
 """)
@@ -687,7 +687,7 @@ medforfattere, hvor landetilknytning ikke er registreret i CURIS.
 
 **Andel (%) angiver andelen af enhedens publikationer, ikke andelen af forfattere.**
 
-**Eksempel**: 1% Storbritannien for SCIENCE betyder, at 1 % af SCIENCE's publikationer har mindst én
+**Eksempel**: 1 % Storbritannien for SCIENCE betyder, at 1 % af SCIENCE's publikationer har mindst én
 ekstern medforfatter fra Storbritannien - ikke at 1 % af alle forfattere (interne og eksterne
 tilsammen) på SCIENCE's publikationer er britiske. En publikation med flere medforfattere fra
 samme land tælles kun med én gang.

@@ -137,6 +137,7 @@ Hold musen over hver boks for at se de præcise tal.
     tabs = st.tabs(tab_labels)
     tabs_dict = dict(zip(tab_labels, tabs))
 
+
     with tabs_dict["Oversigt"]:
         tab_oversigt.render(filters)
     
@@ -160,7 +161,7 @@ Hold musen over hver boks for at se de præcise tal.
     
     with tabs_dict["Forfatterprofil"]:
         tab_forfatterprofil.render(filters)
-       
+
     with tabs_dict["Diversitet"]:
         tab_diversitet.render(filters)
     

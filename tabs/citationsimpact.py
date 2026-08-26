@@ -340,15 +340,15 @@ f"""
 
 Fanen viser, hvor meget KU's publikationer citeres sammenlignet med det globale
 gennemsnit for tilsvarende publikationer - både som gennemsnitlig FWCI pr. enhed
-og som andelen af publikationer blandt verdens mest citerede 10%.
+(se studiet i 'Hvad er FWCI?' nedenfor) og som andelen af publikationer blandt verdens mest citerede 10 %.
 
 Der er dog to vigtige forbehold før FWCI-værdierne anvendes:
-- **Kun en delmænde af KU's publikationer indgår**. For at optræde her skal en publikation både
+- **Kun en delmængde af KU's publikationer indgår**. For at optræde her skal en publikation både
 have et **DOI registreret i CURIS** og være **fundet ved opslag** i OpenAlex/Scopus - publikationer
 uden DOI (f.eks. mange bogkapitler og ældre værker) er - for nu - strukturelt udelukkede, uanset
 deres faktiske citationsgennemslag. 
 - **FWCI-niveauer afhænger systematisk af datakilden**. OpenAlex giver konsekvent højere FWCI-værdier
-end SciVal/Scopus for samme publikationer (se studiet i 'Hvad er FWCI?' nedenfor). Sammenlign
+end SciVal/Scopus for samme publikationer. Sammenlign
 derfor kun tal fra **samme datakilde** - f.eks. to enheder i samme år eller en enhed på tværs af år - 
 aldrig på tværs af datakildeskift i sidepanelet. 
 """)
@@ -377,16 +377,17 @@ de bygger på forskellige publikations- og citationsdatabaser. Se fanen **Datagr
 en sammenligning af datakilderne.
 
 **Sammenligning mellem OpenAlex, Scopus, Dimensions og Web of Science**
+
 Et nyere studie af Scheidsteger, Haunschild og Bornmann (2025), der sammenligner 
 feltnormaliserede citationsscorer for 48 tyske universiteter på tværs af dire databaser, fandt
 en **konsekvent** rækkefølge uden undtagelser: OpenAlex gav den højeste score for samtlige 48 universiteter, 
 foran Dimensions, Scopus og Web of Science i den rækkefølge. 
 
 Årsagen er ikke en fejl i OpenAlex, men databasens grovere emne- og dokumenttypeklassifikation: 
-omkring 40% af OpenAlex' poster mandler en dokumenttypeangivelse - og typer, som WoS/Scopus
+omkring 40 % af OpenAlex' poster mangler en dokumenttypeangivelse - og typer, som WoS/Scopus
 holder adskilt (f.eks. 'Letter', 'Editorial') lægges i OpenAlex sammen med tidsskriftartikler.
 Da den slags sjældent citerede tekster trækker referencesættets gennemsnit ned, bliver den 
-forventede citationsrate lavere - og dermed FWCI-værdien dystematisk højere, selv for
+forventede citationsrate lavere - og dermed FWCI-værdien systematisk højere, selv for
 identiske publikationer. ([Scheidsteger et al., 2025, *Scientometrics*](https://doi.org/10.1007/s11192-025-05338-7))
 """)
 
