@@ -13,7 +13,7 @@ import paramiko
 
 from config import FAC_ORDER, STILLINGSGRUPPER, PARQUET_PATHS, REFERENCE_TABLE_PATHS, hier_cols, doi_filter_sql, author_count_filter, PAIRS_PARQUET_PATHS, FIGUR_CACHE_DIR
 
-@st.cache_resource(show_spinner=False)
+@st.cache_resource(show_spinner="Henter data...")
 def _sync_parquet_from_erda():
     erda = st.secrets["erda"]
 
@@ -23,27 +23,36 @@ def _sync_parquet_from_erda():
     sftp = paramiko.SFTPClient.from_transport(transport)
     print("[ERDA-sync] Forbundet.", flush=True)
 
-    alle_filer = (
-        list(PARQUET_PATHS.items())
-        + list(REFERENCE_TABLE_PATHS.items())
-        + list(PAIRS_PARQUET_PATHS.items())
-    )
-    total = len(alle_filer)
-    bar = st.progress(0, text="Henter data...")
-
     try:
-        for i, (data_source, local_path) in enumerate(alle_filer, start=1):
+        for data_source, local_path in PARQUET_PATHS.items():
             remote_filename = Path(local_path).name
             remote_path = f"{erda['data_path']}/{remote_filename}"
             Path(local_path).parent.mkdir(parents=True, exist_ok=True)
-            bar.progress(i / total, text=f"Henter {remote_filename}...")
+            print(f"[ERDA-sync] Henter {remote_path} ...", flush=True)
+            sftp.get(remote_path, local_path)
+            print(f"[ERDA-sync] Færdig: {local_path}", flush=True)
+
+        for name, local_path in REFERENCE_TABLE_PATHS.items():
+            remote_filename = Path(local_path).name
+            remote_path = f"{erda['data_path']}/{remote_filename}"
+            Path(local_path).parent.mkdir(parents=True, exist_ok=True)
             try:
                 print(f"[ERDA-sync] Henter {remote_path} ...", flush=True)
                 sftp.get(remote_path, local_path)
                 print(f"[ERDA-sync] Færdig: {local_path}", flush=True)
             except FileNotFoundError:
                 print(f"[ERDA-sync] {remote_filename} findes ikke endnu på ERDA - springer over.", flush=True)
-        bar.empty()
+
+        for data_source, local_path in PAIRS_PARQUET_PATHS.items():
+            remote_filename = Path(local_path).name
+            remote_path = f"{erda['data_path']}/{remote_filename}"
+            Path(local_path).parent.mkdir(parents=True, exist_ok=True)
+            try:
+                print(f"[ERDA-sync] Henter {remote_path} ...", flush=True)
+                sftp.get(remote_path, local_path)
+                print(f"[ERDA-sync] Færdig: {local_path}", flush=True)
+            except FileNotFoundError:
+                print(f"[ERDA-sync] {remote_filename} findes ikke endnu på ERDA - springer over.", flush=True)
     finally:
         sftp.close()
         transport.close()
