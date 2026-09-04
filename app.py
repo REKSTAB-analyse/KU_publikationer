@@ -3,7 +3,7 @@ import psutil, os
 
 from data.loader import load_logo, logo_base64, _DEPLOY_DATE, load_org_volume
 from data.loader import load_filter_options, set_active_data_source
-from data.loader import _sync_parquet_from_erda
+from data.loader import _sync_parquet_from_erda, _sync_figurer_from_erda
 from components.sidepanel import render_sidepanel
 from components.charts import fig_org_treemap, PLOTLY_CONFIG
 from components.colors import build_faculty_colors, stillingsgruppe_colors
@@ -47,6 +47,7 @@ def main():
     # --- Synkroniser data fra ERDA, før noget forsøger at læse dem ---
     if ERDA_ENABLED:
         _sync_parquet_from_erda()
+        _sync_figurer_from_erda()
 
     _mem_mb = psutil.Process(os.getpid()).memory_info().rss / 1024 / 1024
     print(f"[DEBUG] Hukommelse efter ERDA-sync: {_mem_mb:.0f} MB", flush=True)

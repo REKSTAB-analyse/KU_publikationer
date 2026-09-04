@@ -11,7 +11,7 @@ from datetime import datetime
 import duckdb
 import paramiko
 
-from config import FAC_ORDER, STILLINGSGRUPPER, PARQUET_PATHS, REFERENCE_TABLE_PATHS, hier_cols, doi_filter_sql, author_count_filter, PAIRS_PARQUET_PATHS
+from config import FAC_ORDER, STILLINGSGRUPPER, PARQUET_PATHS, REFERENCE_TABLE_PATHS, hier_cols, doi_filter_sql, author_count_filter, PAIRS_PARQUET_PATHS, FIGUR_CACHE_DIR
 
 @st.cache_resource()
 def _sync_parquet_from_erda():
@@ -57,6 +57,36 @@ def _sync_parquet_from_erda():
         sftp.close()
         transport.close()
         print("[ERDA-sync] Forbindelse lukket.", flush=True)
+
+@st.cache_resource()
+def _sync_figurer_from_erda():
+    """Synkroniserer ALLE .svg-filer fra ERDA's /figurer/-undermappe - i
+    modsætning til parquet-filerne er filnavnene her ikke kendt på forhånd,
+    så mappen listes først via SFTP, og alt med .svg-endelse hentes ned."""
+    erda = st.secrets["erda"]
+    remote_dir = f"{erda['data_path']}/figurer"
+
+    print("[ERDA-sync] Forbinder til ERDA (figurer)...", flush=True)
+    transport = paramiko.Transport((erda["host"], erda.get("port", 22)))
+    transport.connect(username=erda["username"], password=erda["password"])
+    sftp = paramiko.SFTPClient.from_transport(transport)
+
+    try:
+        FIGUR_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+        try:
+            remote_files = [f for f in sftp.listdir(remote_dir) if f.lower().endswith(".svg")]
+        except FileNotFoundError:
+            print(f"[ERDA-sync] Mappen {remote_dir} findes ikke på ERDA - springer over.", flush=True)
+            return
+
+        for filename in remote_files:
+            local_path = FIGUR_CACHE_DIR / filename
+            print(f"[ERDA-sync] Henter {remote_dir}/{filename} ...", flush=True)
+            sftp.get(f"{remote_dir}/{filename}", str(local_path))
+        print(f"[ERDA-sync] Færdig: {len(remote_files)} figur(er) synkroniseret.", flush=True)
+    finally:
+        sftp.close()
+        transport.close()
 
 @st.cache_resource
 def _get_db_for_source(data_source: str):
@@ -299,3 +329,14 @@ def load_max_author_count(data_source: str, filters: dict) -> int:
     result = conn.execute(sql, params).fetchone()
     max_val = result[0]
     return int(max_val) if max_val is not None else 1
+
+def load_figur_liste() -> list[str]:
+    """Returnerer sorterede filnavne på alle lokalt cachede .svg-figurer."""
+    if not FIGUR_CACHE_DIR.exists():
+        return []
+    return sorted(f.name for f in FIGUR_CACHE_DIR.glob("*.svg"))
+
+def load_figur_svg(filename: str) -> str:
+    """Returnerer selve SVG-indholdet (rå XML) for én figur, til direkte
+    indlejring i st.markdown med unsafe_allow_html=True."""
+    return (FIGUR_CACHE_DIR / filename).read_text(encoding="utf-8")

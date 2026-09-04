@@ -45,6 +45,10 @@ else:
         "SciVal":   r"H:\Publikationsapp\Data\KU_pub_pairs_long_SciVal.parquet",
     }
 
+if ERDA_ENABLED:
+    FIGUR_CACHE_DIR = _DATA_CACHE_DIR / "figurer"
+else:
+    FIGUR_CACHE_DIR = Path(r"H:\Publikationsapp\figurer")
 
 
 

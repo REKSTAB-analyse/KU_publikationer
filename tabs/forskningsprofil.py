@@ -7,7 +7,7 @@ import duckdb
 sys.path.insert(0, str(Path(__file__).parent.parent))
  
 import streamlit as st
-from data.loader import get_cursor
+from data.loader import get_cursor, load_figur_svg
 import plotly.graph_objects as go
 from components.charts import fig_hbar_stacked, fig_year_trend, PLOTLY_CONFIG, domain_shaded_colors, _DOMAIN_COLORS, _hls_gradient
 from components.export import render_table_export
@@ -1030,6 +1030,11 @@ abstract og citationer som input - så selv publikationer
 uden citationer kan klassificeres. ([Analyse af klassifikationsmodellen](https://arxiv.org/pdf/2408.04163))
 """
             )
+
+            #st.markdown(
+               # f'<div style="max-width:700px; margin:auto;">{load_figur_svg("fig_OpenAlex_topics.svg")}</div>',
+                   # unsafe_allow_html=True,
+            #)
         
         with st.expander("Se opslagstabel"):
             st.markdown(
