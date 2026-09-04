@@ -85,7 +85,7 @@ def _query_section(filters, mode, category_sql):
           AND Stil        IN ({ph(filters['stillingsgrupper'])})
           AND Type        IN ({ph(filters['typer'])})
           AND Sprog       IN ({ph(filters['sprog'])})
-          AND Peer_review IN ({ph(filters['peer'])})
+          AND COALESCE(NULLIF(Peer_review, ''), 'Ukendt') IN ({ph(filters['peer'])})
           AND Indholdstype IN ({ph(filters['indholdstyper'])})
           AND ({doi_filter_sql(filters['har_doi'])})
           AND COALESCE(Open_Access, 'Unknown') IN ({ph(filters['open_access'])})
@@ -152,7 +152,7 @@ def _query_trend(filters, category_sql):
           AND Stil        IN ({ph(filters['stillingsgrupper'])})
           AND Type        IN ({ph(filters['typer'])})
           AND Sprog       IN ({ph(filters['sprog'])})
-          AND Peer_review IN ({ph(filters['peer'])})
+          AND COALESCE(NULLIF(Peer_review, ''), 'Ukendt') IN ({ph(filters['peer'])})
           AND Indholdstype IN ({ph(filters['indholdstyper'])})
           AND ({doi_filter_sql(filters['har_doi'])})
           AND COALESCE(Open_Access, 'Unknown') IN ({ph(filters['open_access'])})
@@ -530,7 +530,7 @@ CURIS' registrering. **'Ukendt'** dækker publikationer, hvor status ikke er reg
     with _tab_peer_n:
         _render_section(
             filters, mode,
-            category_sql="COALESCE(Peer_review, 'Ukendt')",
+            category_sql="COALESCE(NULLIF(Peer_review, ''), 'Ukendt')",
             title_prefix="Peer review-status",
             order=PEER_ORDER, colors=PEER_COLORS, labels=PEER_LABELS,
             chart_mode="antal",
@@ -539,7 +539,7 @@ CURIS' registrering. **'Ukendt'** dækker publikationer, hvor status ikke er reg
     with _tab_peer_p:
         _render_section(
             filters, mode,
-            category_sql="COALESCE(Peer_review, 'Ukendt')",
+            category_sql="COALESCE(NULLIF(Peer_review, ''), 'Ukendt')",
             title_prefix="Peer review-status",
             order=PEER_ORDER, colors=PEER_COLORS, labels=PEER_LABELS,
             chart_mode="pct",
@@ -548,7 +548,7 @@ CURIS' registrering. **'Ukendt'** dækker publikationer, hvor status ikke er reg
     with _tab_peer_r:
         _render_section(
             filters, mode,
-            category_sql="COALESCE(Peer_review, 'Ukendt')",
+            category_sql="COALESCE(NULLIF(Peer_review, ''), 'Ukendt')",
             title_prefix="Peer review-status",
             order=PEER_ORDER, colors=PEER_COLORS, labels=PEER_LABELS,
             chart_mode="rate",
@@ -670,7 +670,7 @@ KU; er f.eks. kun HUM valgt, viser graferne udelukkende udviklingen for HUM.
                            top_x=_topx_sprog, always_keep=["Ukendt"])
 
     with _tab_trend_peer:
-        _render_trend_tab(filters, "COALESCE(Peer_review, 'Ukendt')", "Peer review-status",
+        _render_trend_tab(filters, "COALESCE(NULLIF(Peer_review, ''), 'Ukendt')", "Peer review-status",
                            order=PEER_ORDER, colors=PEER_COLORS, labels=PEER_LABELS)
 
     with _tab_trend_oa:

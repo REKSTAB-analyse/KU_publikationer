@@ -30,7 +30,7 @@ def _org_where(filters, alias="", include_year_range=True):
           AND {alias}Stil        IN ({ph(filters['stillingsgrupper'])})
           AND {alias}Type        IN ({ph(filters['typer'])})
           AND {alias}Sprog       IN ({ph(filters['sprog'])})
-          AND {alias}Peer_review IN ({ph(filters['peer'])})
+          AND COALESCE(NULLIF({alias}Peer_review, ''), 'Ukendt') IN ({ph(filters['peer'])})
           AND {alias}Indholdstype IN ({ph(filters['indholdstyper'])})
           AND ({doi_filter_sql(filters['har_doi']).replace('DOI', f'{alias}DOI')})
           AND COALESCE({alias}Open_Access, 'Unknown') IN ({ph(filters['open_access'])})

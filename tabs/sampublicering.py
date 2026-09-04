@@ -28,7 +28,7 @@ def _query_intra_inter_trend(filters, metric, niveau):
         WHERE Year IS NOT NULL
           AND Type        IN ({ph(filters['typer'])})
           AND Sprog       IN ({ph(filters['sprog'])})
-          AND Peer_review IN ({ph(filters['peer'])})
+          AND COALESCE(NULLIF(Peer_review, ''), 'Ukendt') IN ({ph(filters['peer'])})
           AND Indholdstype IN ({ph(filters['indholdstyper'])})
           AND COALESCE(Open_Access, 'Unknown') IN ({ph(filters['open_access'])})
           AND ({doi_filter_sql(filters['har_doi'])})
@@ -177,7 +177,7 @@ def _samarbejde_base_where(filters):
         WHERE Year IS NOT NULL
           AND Type        IN ({ph(filters['typer'])})
           AND Sprog       IN ({ph(filters['sprog'])})
-          AND Peer_review IN ({ph(filters['peer'])})
+          AND COALESCE(NULLIF(Peer_review, ''), 'Ukendt') IN ({ph(filters['peer'])})
           AND Indholdstype IN ({ph(filters['indholdstyper'])})
           AND COALESCE(Open_Access, 'Unknown') IN ({ph(filters['open_access'])})
           AND ({doi_filter_sql(filters['har_doi'])})

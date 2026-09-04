@@ -62,7 +62,7 @@ def _base_where_and_params(filters):
           AND Stil         IN ({ph(filters['stillingsgrupper'])})
           AND Type        IN ({ph(filters['typer'])})
           AND Sprog       IN ({ph(filters['sprog'])})
-          AND Peer_review IN ({ph(filters['peer'])})
+          AND COALESCE(NULLIF(Peer_review, ''), 'Ukendt') IN ({ph(filters['peer'])})
           AND Indholdstype IN ({ph(filters['indholdstyper'])})
           AND COALESCE(Open_Access, 'Unknown') IN ({ph(filters['open_access'])})
           AND Year        BETWEEN ? AND ?
@@ -163,7 +163,7 @@ def _query_year_totals_by_count(filters, count_col="ext_id"):
           AND Stil         IN ({ph(filters['stillingsgrupper'])})
           AND Type        IN ({ph(filters['typer'])})
           AND Sprog       IN ({ph(filters['sprog'])})
-          AND Peer_review IN ({ph(filters['peer'])})
+          AND COALESCE(NULLIF(Peer_review, ''), 'Ukendt') IN ({ph(filters['peer'])})
           AND Indholdstype IN ({ph(filters['indholdstyper'])})
           AND COALESCE(Open_Access, 'Unknown') IN ({ph(filters['open_access'])})
           AND Year IS NOT NULL
@@ -194,7 +194,7 @@ def _query_stil_trend(filters):
           AND Stil         IN ({ph(filters['stillingsgrupper'])})
           AND Type        IN ({ph(filters['typer'])})
           AND Sprog       IN ({ph(filters['sprog'])})
-          AND Peer_review IN ({ph(filters['peer'])})
+          AND COALESCE(NULLIF(Peer_review, ''), 'Ukendt') IN ({ph(filters['peer'])})
           AND Indholdstype IN ({ph(filters['indholdstyper'])})
           AND COALESCE(Open_Access, 'Unknown') IN ({ph(filters['open_access'])})
           AND Year IS NOT NULL
@@ -230,7 +230,7 @@ def _query_stil_pub_trend(filters):
           AND Stil         IN ({ph(filters['stillingsgrupper'])})
           AND Type        IN ({ph(filters['typer'])})
           AND Sprog       IN ({ph(filters['sprog'])})
-          AND Peer_review IN ({ph(filters['peer'])})
+          AND COALESCE(NULLIF(Peer_review, ''), 'Ukendt') IN ({ph(filters['peer'])})
           AND Indholdstype IN ({ph(filters['indholdstyper'])})
           AND COALESCE(Open_Access, 'Unknown') IN ({ph(filters['open_access'])})
           AND Year IS NOT NULL
@@ -270,7 +270,7 @@ def _query_stil_korr_trend(filters):
           AND Stil         IN ({ph(filters['stillingsgrupper'])})
           AND Type        IN ({ph(filters['typer'])})
           AND Sprog       IN ({ph(filters['sprog'])})
-          AND Peer_review IN ({ph(filters['peer'])})
+          AND COALESCE(NULLIF(Peer_review, ''), 'Ukendt') IN ({ph(filters['peer'])})
           AND Indholdstype IN ({ph(filters['indholdstyper'])})
           AND COALESCE(Open_Access, 'Unknown') IN ({ph(filters['open_access'])})
           AND Year IS NOT NULL

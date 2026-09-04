@@ -7,7 +7,43 @@ import plotly.graph_objects as go
 import math
 from data.loader import _get_db_for_source
 from components.charts import fig_hbar_stacked, PLOTLY_CONFIG
-from config import FAC_ORDER, year_range_label
+from config import FAC_ORDER, year_range_label, doi_filter_sql, author_count_filter
+
+def _base_where_and_params(filters, alias=""):
+    """
+    Identisk med _base_where_and_params i oversigt.py - bruges her for at
+    sikre, at Datagrundlag-fanens dæknings- og Venn-tal bruger PRÆCIS samme
+    population som Oversigt-fanens 'Publikationer'-KPI. Bruges IKKE af
+    _query_missing_fak/_query_field_completeness, som bevidst ser på den
+    bredere, ufiltrerede Intern+årsinterval-population - ellers ville de
+    aldrig kunne vise andet end 0 (en publikation uden fx fakultet kan pr.
+    definition ikke bestå et Fak IN (...)-filter, og ville derfor være
+    filtreret væk, før den overhovedet nåede frem til optællingen).
+    """
+    ph = lambda lst: ", ".join(["?" for _ in lst])
+    ac_sql, ac_params = author_count_filter(filters['min_forfattere'], filters['max_forfattere'], alias=alias)
+    where_sql = f"""
+        WHERE {alias}Intern      = 'Intern'
+          AND {alias}Fak         IN ({ph(filters['fakultet'])})
+          AND {alias}Inst        IN ({ph(filters['institutter'])})
+          AND {alias}Stil        IN ({ph(filters['stillingsgrupper'])})
+          AND {alias}Type        IN ({ph(filters['typer'])})
+          AND {alias}Sprog       IN ({ph(filters['sprog'])})
+          AND COALESCE(NULLIF({alias}Peer_review, ''), 'Ukendt') IN ({ph(filters['peer'])})
+          AND {alias}Indholdstype IN ({ph(filters['indholdstyper'])})
+          AND ({doi_filter_sql(filters['har_doi']).replace('DOI', f'{alias}DOI')})
+          AND COALESCE({alias}Open_Access, 'Unknown') IN ({ph(filters['open_access'])})
+          AND {alias}Year        BETWEEN ? AND ?
+          AND ({ac_sql})
+    """
+    params = (
+        filters['fakultet'] + filters['institutter'] + filters['stillingsgrupper'] +
+        filters['typer'] + filters['sprog'] + filters['peer'] +
+        filters['indholdstyper'] + filters['open_access'] +
+        [filters['aar_fra'], filters['aar_til']] + ac_params
+    )
+    return where_sql, params
+
 
 COV_ORDER = ["Fundet", "Ikke fundet"]
 COV_COLORS = {"Fundet": "#901a1e", "Ikke fundet": "#122947"}
@@ -21,21 +57,24 @@ def _coverage_labels(source_name: str) -> dict:
 
 
 @st.cache_data
-def _query_source_coverage(source_name: str, aar_fra: int, aar_til: int) -> dict:
+def _query_source_coverage(source_name: str, filters: dict) -> dict:
     """
     Andel af CURIS' publikationer, der har kunnet matches til en post i den
     angivne eksterne kilde (OpenAlex eller SciVal). Begge kilder er bygget
     ved at slå CURIS' egne DOI'er op eksternt, og kan derfor pr. konstruktion
-    aldrig indeholde publikationer, CURIS ikke allerede har.
+    aldrig indeholde publikationer, CURIS ikke allerede har. Bruger samme
+    fulde filtersæt som Oversigt-fanens 'Publikationer'-KPI (_base_where_and_params),
+    så CURIS-grundpopulationen her er tal-for-tal identisk med Oversigt.
     """
     curis_conn = _get_db_for_source("CURIS")
     source_conn = _get_db_for_source(source_name)
+    where_sql, params = _base_where_and_params(filters)
 
-    curis_rows = curis_conn.execute("""
+    curis_rows = curis_conn.execute(f"""
         SELECT DISTINCT Fak, PURE_ID
         FROM pubs
-        WHERE Intern = 'Intern' AND Fak != '' AND Year BETWEEN ? AND ?
-    """, [aar_fra, aar_til]).fetchall()
+        {where_sql}
+    """, params).fetchall()
 
     source_ids = {
         r[0] for r in source_conn.execute("SELECT DISTINCT PURE_ID FROM pubs").fetchall()
@@ -58,24 +97,104 @@ def _query_source_coverage(source_name: str, aar_fra: int, aar_til: int) -> dict
 
     return ordered
 
+@st.cache_data
+def _query_missing_fak(aar_fra: int, aar_til: int) -> dict:
+    """
+    Antal Intern-markerede CURIS-publikationer i det valgte årsinterval, hvor
+    INGEN af forfatterne har kunnet tildeles et fakultet - dvs. hver eneste
+    forfatter-række for publikationen mangler Fak, typisk fordi ingen af
+    forfatterne kunne findes i HR-data (Personalesammensætning) pr. 31.
+    december i udgivelsesåret, eller fordi publikationen slet ikke har
+    forfatteroplysninger. Har blot ÉN forfatter en fakultetstilknytning,
+    tæller publikationen IKKE med her. Disse publikationer indgår ikke i
+    nogen af appens fakultetsopdelte analyser og kan per definition ikke
+    fordeles på fakultet - de opgøres derfor samlet, ikke pr. fakultet.
+    """
+    curis_conn = _get_db_for_source("CURIS")
+
+    total = curis_conn.execute("""
+        SELECT COUNT(DISTINCT PURE_ID) FROM pubs
+        WHERE Intern = 'Intern' AND Year BETWEEN ? AND ?
+    """, [aar_fra, aar_til]).fetchone()[0]
+
+    missing = curis_conn.execute("""
+        SELECT COUNT(*) FROM (
+            SELECT PURE_ID
+            FROM pubs
+            WHERE Intern = 'Intern' AND Year BETWEEN ? AND ?
+            GROUP BY PURE_ID
+            HAVING SUM(CASE WHEN Fak IS NOT NULL AND Fak != '' THEN 1 ELSE 0 END) = 0
+        )
+    """, [aar_fra, aar_til]).fetchone()[0]
+
+    return {"total": total, "missing": missing}
 
 @st.cache_data
-def _query_openalex_scival_overlap(aar_fra: int, aar_til: int) -> dict:
+def _query_field_completeness(aar_fra: int, aar_til: int) -> dict:
+    """
+    For hvert felt, appens filtre bygger på (Fak/Inst/Stil/Type/Sprog/
+    Indholdstype/Peer_review), tælles hvor mange Intern-publikationer i det
+    valgte årsinterval der mangler feltet FULDSTÆNDIGT - dvs. INGEN af
+    publikationens forfatter-rækker har en værdi. Sådanne publikationer kan
+    aldrig matches af et IN(...)-filter på feltet (heller ikke når "alt" er
+    valgt i sidepanelet, da valgmulighederne selv udelader tomme værdier via
+    load_filter_options), og forsvinder derfor stille fra enhver analyse,
+    der filtrerer på det pågældende felt.
+    """
+    curis_conn = _get_db_for_source("CURIS")
+
+    row = curis_conn.execute("""
+        SELECT
+            COUNT(*) AS total,
+            SUM(CASE WHEN has_fak = 0 THEN 1 ELSE 0 END) AS fak,
+            SUM(CASE WHEN has_inst = 0 THEN 1 ELSE 0 END) AS inst,
+            SUM(CASE WHEN has_stil = 0 THEN 1 ELSE 0 END) AS stil,
+            SUM(CASE WHEN has_type = 0 THEN 1 ELSE 0 END) AS type,
+            SUM(CASE WHEN has_sprog = 0 THEN 1 ELSE 0 END) AS sprog,
+            SUM(CASE WHEN has_indholdstype = 0 THEN 1 ELSE 0 END) AS indholdstype,
+            SUM(CASE WHEN has_fak = 0 OR has_inst = 0 THEN 1 ELSE 0 END) AS affiliering,
+            SUM(CASE WHEN has_type = 0 OR has_sprog = 0 OR has_indholdstype = 0
+                 THEN 1 ELSE 0 END) AS ovrige,
+            SUM(CASE WHEN has_fak = 0 OR has_inst = 0 OR has_stil = 0 OR has_type = 0
+                      OR has_sprog = 0 OR has_indholdstype = 0
+                 THEN 1 ELSE 0 END) AS any_missing
+        FROM (
+            SELECT
+                PURE_ID,
+                MAX(CASE WHEN Fak IS NOT NULL AND Fak != '' THEN 1 ELSE 0 END) AS has_fak,
+                MAX(CASE WHEN Inst IS NOT NULL AND Inst != '' THEN 1 ELSE 0 END) AS has_inst,
+                MAX(CASE WHEN Stil IS NOT NULL AND Stil != '' THEN 1 ELSE 0 END) AS has_stil,
+                MAX(CASE WHEN Type IS NOT NULL AND Type != '' THEN 1 ELSE 0 END) AS has_type,
+                MAX(CASE WHEN Sprog IS NOT NULL AND Sprog != '' THEN 1 ELSE 0 END) AS has_sprog,
+                MAX(CASE WHEN Indholdstype IS NOT NULL AND Indholdstype != '' THEN 1 ELSE 0 END) AS has_indholdstype
+            FROM pubs
+            WHERE Intern = 'Intern' AND Year BETWEEN ? AND ?
+            GROUP BY PURE_ID
+        )
+    """, [aar_fra, aar_til]).fetchone()
+
+    cols = ["total", "fak", "inst", "stil", "type", "sprog", "indholdstype",
+            "affiliering", "ovrige", "any_missing"]
+    return dict(zip(cols, row))
+
+@st.cache_data
+def _query_openalex_scival_overlap(filters: dict) -> dict:
     """
     Antal CURIS-publikationer fundet i hhv. OpenAlex, SciVal, begge og ingen
     af delene - til Venn-diagrammet. Samme grundpopulation som dæknings-
-    sektionerne ovenfor (CURIS-publikationer med kendt fakultet i det valgte
-    årsinterval), så tallene er direkte sammenlignelige med søjlerne ovenfor.
+    sektionerne ovenfor (_base_where_and_params - identisk med Oversigt-
+    fanens 'Publikationer'-KPI), så tallene er direkte sammenlignelige.
     """
     curis_conn = _get_db_for_source("CURIS")
     openalex_conn = _get_db_for_source("OpenAlex")
     scival_conn = _get_db_for_source("SciVal")
+    where_sql, params = _base_where_and_params(filters)
 
     curis_ids = {
-        r[0] for r in curis_conn.execute("""
+        r[0] for r in curis_conn.execute(f"""
             SELECT DISTINCT PURE_ID FROM pubs
-            WHERE Intern = 'Intern' AND Fak != '' AND Year BETWEEN ? AND ?
-        """, [aar_fra, aar_til]).fetchall()
+            {where_sql}
+        """, params).fetchall()
     }
     openalex_ids = {r[0] for r in openalex_conn.execute("SELECT DISTINCT PURE_ID FROM pubs").fetchall()}
     scival_ids = {r[0] for r in scival_conn.execute("SELECT DISTINCT PURE_ID FROM pubs").fetchall()}
@@ -226,9 +345,27 @@ udgivelsesåret, er det kun tilknytningen pr. 31. december, der indgår - uanset
 publikationen faktisk udkom. 
 - **Indeværende år har endnu ingen HR-data**. Et års data kan først indhentes, efter 31. 
 december samme år er passeret. 
+""")
 
+    _fc = _query_field_completeness(filters['aar_fra'], filters['aar_til'])
+    if _fc['total'] > 0 and _fc['any_missing'] > 0:
+        _pct_any = 100 * _fc['any_missing'] / _fc['total']
+        _pct_affiliering = 100 * _fc['affiliering'] / _fc['any_missing']
+        _pct_stil = 100 * _fc['stil'] / _fc['any_missing']
+        _pct_ovrige = 100 * _fc['ovrige'] / _fc['any_missing']
+
+        _intro = (
+            f"**{_pct_any:.1f} %** af publikationerne i {year_range_label(filters['aar_fra'], filters['aar_til'])} "
+            f"filtreres fra i appens analyser, fordi de mangler oplysninger om fakultet, institut, "
+            f"stillingsgruppe. Af disse mangler **{_pct_affiliering:.1f} %** "
+            f"oplysning om affiliering (fakultet og/eller institut), og **{_pct_stil:.1f} %** mangler "
+            f"stillingsgruppe."
+        )
+        st.markdown(_intro)
+
+    st.markdown(
+"""
 ---
-
 #### Datakilder 
 
 Hvor godt dækker OpenAlex og SciVal reelt CURIS' publikationer - og hvor meget overlapper de
@@ -251,7 +388,7 @@ Grafen nedenfor respekterer sidepanelets valgte årsinterval, men ignorerer alle
 (fakultet/institut/stillingsgruppe/etc.). 
 """)
 
-    openalex_coverage = _query_source_coverage("OpenAlex", filters['aar_fra'], filters['aar_til'])
+    openalex_coverage = _query_source_coverage("OpenAlex", filters)
 
     fig = fig_hbar_stacked(
         data=openalex_coverage, order=COV_ORDER, colors=COV_COLORS, labels=_coverage_labels("OpenAlex"),
@@ -270,7 +407,7 @@ kan pr. konstruktion aldrig indeholde publikationer, CURIS ikke allerede har.
 """
     )
 
-    scival_coverage = _query_source_coverage("SciVal", filters['aar_fra'], filters['aar_til'])
+    scival_coverage = _query_source_coverage("SciVal", filters)
 
     fig_scival = fig_hbar_stacked(
         data=scival_coverage, order=COV_ORDER, colors=COV_COLORS, labels=_coverage_labels("SciVal"),
@@ -291,7 +428,7 @@ skrevne tal gør.
 """
     )
 
-    overlap = _query_openalex_scival_overlap(filters['aar_fra'], filters['aar_til'])
+    overlap = _query_openalex_scival_overlap(filters)
     fig_venn = _render_venn(overlap)
     st.plotly_chart(fig_venn, width="stretch", config=PLOTLY_CONFIG)
 
