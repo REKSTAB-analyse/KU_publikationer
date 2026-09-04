@@ -28,7 +28,7 @@ _EXT_EXISTS_SQL = """
     ) THEN 'Ja' ELSE 'Nej' END
 """
 
-@st.cache_data
+@st.cache_data(show_spinner="Henter data...")
 def _query_section(filters, mode, category_sql):
     ph = lambda lst: ", ".join(["?" for _ in lst])
     dims = hier_cols(mode)
@@ -102,7 +102,7 @@ def _query_section(filters, mode, category_sql):
     
     return result, cluster_map
 
-@st.cache_data
+@st.cache_data(show_spinner="Henter data...")
 def _query_land_by_org(filters, mode):
     """Land pr. organisatorisk enhed - join mellem interne (dims) og eksterne (Land)"""
     ph = lambda lst: ", ".join(["?" for _ in lst])
@@ -178,7 +178,7 @@ def _query_land_by_org(filters, mode):
 
     return result, cluster_map
 
-@st.cache_data
+@st.cache_data(show_spinner="Henter data...")
 def _query_org_totals(filters, mode):
     """Samlet antal INTERNE publikationer pr. organisatorisk enhed,
     uafhængigt af om de har eksterne medforfattere - bruges som nævner til
@@ -188,7 +188,7 @@ def _query_org_totals(filters, mode):
     return {unit: sum(cats.values()) for unit, cats in data.items()}
 
 
-@st.cache_data
+@st.cache_data(show_spinner="Henter data...")
 def _query_country_count(filters, mode):
     """
     Antal distinkte samarbejdslande pr. organisatorisk enhed - tæller efter
@@ -302,7 +302,7 @@ def _merge_land_categories(data: dict) -> dict:
         merged[unit] = new_cats
     return merged
 
-@st.cache_data
+@st.cache_data(show_spinner="Henter data...")
 def _query_countries(filters):
     ph = lambda lst: ", ".join(["?" for _ in lst])
     ac_sql, ac_params = author_count_filter(filters['min_forfattere'], filters['max_forfattere'])
@@ -340,7 +340,7 @@ def _query_countries(filters):
     rows = get_cursor().execute(sql, params).fetchall()
     return {land: n for land, n in rows}
 
-@st.cache_data
+@st.cache_data(show_spinner="Henter data...")
 def _query_ekst_trend(filters):
     """Andel/antal publikationer med ekstern samarbejdspartner, år for år -
     ignorerer bevidst sidepanelets årsinterval og viser altid hele den
@@ -379,7 +379,7 @@ def _query_ekst_trend(filters):
         result.setdefault(year, {})[cat] = n
     return result
 
-@st.cache_data
+@st.cache_data(show_spinner="Henter data...")
 def _query_land_trend(filters):
     """Samarbejdslande år for år, uafhængig af sidepanelets årsinterval -
     viser altid hele den tilgængelige periode. Samme forfatter-tælling som
@@ -422,7 +422,7 @@ def _query_land_trend(filters):
         result.setdefault(year, {})[raw_land] = n
     return result
 
-@st.cache_data
+@st.cache_data(show_spinner="Henter data...")
 def _query_year_totals(filters):
     """Samlet antal INTERNE publikationer pr. år, uafhængigt af om de har
     eksterne medforfattere - bruges som nævner til Samarbejdslande over
@@ -457,7 +457,7 @@ def _query_year_totals(filters):
     rows = get_cursor().execute(sql, params).fetchall()
     return {year: n for year, n in rows}
 
-@st.cache_data
+@st.cache_data(show_spinner="Henter data...")
 def _query_country_count_trend(filters):
     """Antal DISTINKTE samarbejdslande år for år - uafhængig af sidepanelets
     årsinterval, viser altid hele den tilgængelige periode."""

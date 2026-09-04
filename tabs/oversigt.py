@@ -37,7 +37,7 @@ def _base_where_and_params(filters, alias=""):
     return where_sql, params
 
 
-@st.cache_data
+@st.cache_data(show_spinner="Henter data...")
 def _query_kpis(filters):
     """Nøgletal for det aktuelt filtrerede udsnit - ingen organisatorisk
     nedbrydning, kun samlede tal. Bemærk: 'Andel Open Access' antager, at
@@ -68,7 +68,7 @@ def _query_kpis(filters):
     }
 
 
-@st.cache_data
+@st.cache_data(show_spinner="Henter data...")
 def _query_intl_kpis(filters):
     """Andel publikationer med mindst én ekstern medforfatter, og antal
     distinkte samarbejdslande - inden for det aktuelt filtrerede udsnit."""
@@ -95,7 +95,7 @@ def _query_intl_kpis(filters):
     pct_intl = round(100 * intl / total, 1) if total else 0
     return {"pct_intl": pct_intl, "n_lande": n_lande or 0}
 
-@st.cache_data
+@st.cache_data(show_spinner="Henter data...")
 def _query_pub_trend(filters):
     """Antal publikationer år for år, brudt ned på PRÆCIS det organisatoriske
     niveau valgt i sidepanelet (Fak/Inst) - samme princip som Forskningsprofils
@@ -153,7 +153,7 @@ def _query_pub_trend(filters):
 
     return by_year_unit
 
-@st.cache_data
+@st.cache_data(show_spinner="Henter data...")
 def _query_author_trend(filters):
     """Samme princip som _query_pub_trend, men tæller unikke forfattere."""
     ph = lambda lst: ", ".join(["?" for _ in lst])

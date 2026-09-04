@@ -56,7 +56,7 @@ def _coverage_labels(source_name: str) -> dict:
     }
 
 
-@st.cache_data
+@st.cache_data(show_spinner="Henter data...")
 def _query_source_coverage(source_name: str, filters: dict) -> dict:
     """
     Andel af CURIS' publikationer, der har kunnet matches til en post i den
@@ -97,7 +97,7 @@ def _query_source_coverage(source_name: str, filters: dict) -> dict:
 
     return ordered
 
-@st.cache_data
+@st.cache_data(show_spinner="Henter data...")
 def _query_missing_fak(aar_fra: int, aar_til: int) -> dict:
     """
     Antal Intern-markerede CURIS-publikationer i det valgte årsinterval, hvor
@@ -129,7 +129,7 @@ def _query_missing_fak(aar_fra: int, aar_til: int) -> dict:
 
     return {"total": total, "missing": missing}
 
-@st.cache_data
+@st.cache_data(show_spinner="Henter data...")
 def _query_field_completeness(aar_fra: int, aar_til: int) -> dict:
     """
     For hvert felt, appens filtre bygger på (Fak/Inst/Stil/Type/Sprog/
@@ -177,7 +177,7 @@ def _query_field_completeness(aar_fra: int, aar_til: int) -> dict:
             "affiliering", "ovrige", "any_missing"]
     return dict(zip(cols, row))
 
-@st.cache_data
+@st.cache_data(show_spinner="Henter data...")
 def _query_openalex_scival_overlap(filters: dict) -> dict:
     """
     Antal CURIS-publikationer fundet i hhv. OpenAlex, SciVal, begge og ingen
@@ -356,8 +356,8 @@ december samme år er passeret.
 
         _intro = (
             f"**{_pct_any:.1f} %** af publikationerne i {year_range_label(filters['aar_fra'], filters['aar_til'])} "
-            f"filtreres fra i appens analyser, fordi de mangler oplysninger om fakultet, institut, "
-            f"stillingsgruppe. Af disse mangler **{_pct_affiliering:.1f} %** "
+            f"filtreres fra i appens analyser, fordi de mangler oplysninger om fakultet, institut "
+            f"eller stillingsgruppe. Af disse mangler **{_pct_affiliering:.1f} %** "
             f"oplysning om affiliering (fakultet og/eller institut), og **{_pct_stil:.1f} %** mangler "
             f"stillingsgruppe."
         )

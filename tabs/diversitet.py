@@ -135,7 +135,7 @@ def _current_unit_label(filters):
 # --- Kønsfordeling / Publikationer pr. køn: direkte klon af forfatterprofil.py's
 # _query_authors/_render_section, blot med kategorien hardcodet til køn ---
 
-@st.cache_data
+@st.cache_data(show_spinner="Henter data...")
 def _query_koen(filters, mode, count_col="ext_id"):
     where_sql, params = _base_where(filters)
     dims = hier_cols(mode)
@@ -181,7 +181,7 @@ def _query_koen(filters, mode, count_col="ext_id"):
     return result, cluster_map
 
 
-@st.cache_data
+@st.cache_data(show_spinner="Henter data...")
 def _query_koen_totals(filters, mode, count_col="PURE_ID"):
     """Selvstændig, udelt nævner til Andel (%) - samme princip som
     forfatterprofil.py's _query_stil_totals."""
@@ -206,7 +206,7 @@ def _query_koen_totals(filters, mode, count_col="PURE_ID"):
         result = {"KU samlet": ku_total, **result}
     return result
 
-@st.cache_data
+@st.cache_data(show_spinner="Henter data...")
 def _query_statsbg(filters, mode, count_col="ext_id"):
     """Statsborgerskabsfordeling, grupperet via _statsbg_region_da.
     count_col='ext_id': aggregeres trygt i SQL pr. rå landekode og summeres
@@ -281,7 +281,7 @@ def _query_statsbg(filters, mode, count_col="ext_id"):
             cluster_map = {"KU samlet": None, **cluster_map}
         return result, cluster_map
 
-@st.cache_data
+@st.cache_data(show_spinner="Henter data...")
 def _query_statsbg_pr_stil(filters):
     """Statsborgerskabsfordeling KRYDSET med stillingsgruppe - samme princip
     som _query_koen_pr_stil, grupperet via _statsbg_region_da."""
@@ -295,7 +295,7 @@ def _query_statsbg_pr_stil(filters):
         stil_dict[gruppe] = stil_dict.get(gruppe, 0) + n
     return result
 
-@st.cache_data
+@st.cache_data(show_spinner="Henter data...")
 def _query_statsbg_forfatterskaber(filters, mode):
     """Antal FORFATTERSKABER pr. statsborgerskabsregion - samme princip som
     _query_koen_forfatterskaber."""
@@ -332,7 +332,7 @@ def _query_statsbg_forfatterskaber(filters, mode):
 _STATSBG_RATE_KATEGORIER = [k for k in STATSBG_ORDER if k != "Ukendt"]
 
 
-@st.cache_data
+@st.cache_data(show_spinner="Henter data...")
 def _query_statsbg_rate(filters, mode, taeller="forfatterskaber"):
     """Rate pr. forfatter, pr. statsborgerskabsregion - samme princip som
     _query_koen_rate, generaliseret til alle regioner (minus Ukendt)."""
@@ -423,7 +423,7 @@ def _render_statsbg_rate(filters, mode, taeller="forfatterskaber", min_celle=4):
         key=f"export_diversitet_statsbg_rate_{taeller}",
     )
 
-@st.cache_data
+@st.cache_data(show_spinner="Henter data...")
 def _query_koen_rate(filters, mode, taeller="forfatterskaber"):
     """Rate pr. forfatter, pr. køn. taeller='forfatterskaber' tæller hver
     persons rolle fuldt ud (kan udvandes af medforfattere ikke); 
@@ -608,7 +608,7 @@ def _render_statsbg_section(filters, mode, chart_mode="antal", count_col="ext_id
         key=f"export_diversitet_statsbg_{count_col}_{chart_mode}",
     )
 
-@st.cache_data
+@st.cache_data(show_spinner="Henter data...")
 def _query_koen_pr_stil(filters):
     """Kønsfordeling KRYDSET med stillingsgruppe - Stillingsgruppe som
     x-akse, køn som stakkede kategorier. Viser hele det aktuelt valgte
@@ -626,7 +626,7 @@ def _query_koen_pr_stil(filters):
         result.setdefault(stil, {})[koen] = n
     return result
 
-@st.cache_data
+@st.cache_data(show_spinner="Henter data...")
 def _query_koen_forfatterskaber(filters, mode):
     """Antal FORFATTERSKABER (ikke distinkte publikationer) pr. køn - hver
     række i pubs er én persons rolle på én publikation, matcher samme
@@ -659,7 +659,7 @@ def _query_koen_forfatterskaber(filters, mode):
 
     return result
 
-@st.cache_data
+@st.cache_data(show_spinner="Henter data...")
 def _query_koensfordeling_trend(filters):
     """Antal personer pr. køn, år for år - KU samlet, eller ét linjepar pr.
     valgt fakultet, hvis specifikke fakulteter er eksplicit valgt. Ignorerer
@@ -706,7 +706,7 @@ def _query_koensfordeling_trend(filters):
             result.setdefault(year, {})[f"{fak} ({koen})"] = n
     return result
 
-@st.cache_data
+@st.cache_data(show_spinner="Henter data...")
 def _query_koen_trend_generic(filters, count_expr):
     """Delt forespørgsel til ALLE fem trend-grafer - count_expr styrer om
     der tælles forfattere, publikationer eller forfatterskaber. 'Ukendt'
@@ -744,17 +744,17 @@ def _query_koen_trend_generic(filters, count_expr):
     return result
 
 
-@st.cache_data
+@st.cache_data(show_spinner="Henter data...")
 def _query_koen_trend(filters):
     return _query_koen_trend_generic(filters, "COUNT(DISTINCT ext_id)")
 
 
-@st.cache_data
+@st.cache_data(show_spinner="Henter data...")
 def _query_pub_koen_trend(filters):
     return _query_koen_trend_generic(filters, "COUNT(DISTINCT PURE_ID)")
 
 
-@st.cache_data
+@st.cache_data(show_spinner="Henter data...")
 def _query_pub_total_trend(filters):
     """Samlet antal ALLE publikationer år for år - selvstændig, udelt nævner
     til 'Publikationer pr. køn over tid's Andel (%), samme princip som
@@ -787,7 +787,7 @@ def _query_pub_total_trend(filters):
     return dict(rows)
 
 
-@st.cache_data
+@st.cache_data(show_spinner="Henter data...")
 def _query_koen_stil_trend(filters):
     """Kønsfordeling KRYDSET med stillingsgruppe, år for år - én serie pr.
     (stillingsgruppe, køn). Ekskluderer 'Ukendt' stillingsgruppe, samme
@@ -826,7 +826,7 @@ def _query_koen_stil_trend(filters):
     return result
 
 
-@st.cache_data
+@st.cache_data(show_spinner="Henter data...")
 def _query_koen_rate_trend(filters, taeller="forfatterskaber"):
     """Rate pr. forfatter, år for år - samme tæller/nævner-princip som
     _query_koen_rate, bare pr. år i stedet for pr. organisatorisk enhed."""
@@ -882,7 +882,7 @@ def _render_koen_trend_tab(filters, min_celle=4):
         key="export_diversitet_koen_trend",
     )
 
-@st.cache_data
+@st.cache_data(show_spinner="Henter data...")
 def _query_statsbg_trend(filters):
     """Statsborgerskabsfordeling år for år - respekterer sidepanelets
     Fak/Inst/Stil-filtre, viser ét linjesæt (én linje pr. region), ikke
@@ -920,7 +920,7 @@ def _query_statsbg_trend(filters):
         year_dict[gruppe] = year_dict.get(gruppe, 0) + n
     return result
 
-@st.cache_data
+@st.cache_data(show_spinner="Henter data...")
 def _query_statsbg_pub_trend(filters):
     """Se _query_statsbg's PURE_ID-gren for forklaring af, hvorfor
     deduplikering sker i Python pr. region, ikke i SQL pr. rå landekode."""
@@ -957,7 +957,7 @@ def _query_statsbg_pub_trend(filters):
     return {year: {g: len(s) for g, s in groups.items()} for year, groups in pub_sets.items()}
 
 
-@st.cache_data
+@st.cache_data(show_spinner="Henter data...")
 def _query_statsbg_forfatterskaber_trend(filters):
     """Antal FORFATTERSKABER pr. statsborgerskabsregion, år for år - samme
     princip som _query_koen_trend_generic med COUNT(*)."""
@@ -994,7 +994,7 @@ def _query_statsbg_forfatterskaber_trend(filters):
         year_dict[gruppe] = year_dict.get(gruppe, 0) + n
     return result
 
-@st.cache_data
+@st.cache_data(show_spinner="Henter data...")
 def _query_statsbg_rate_trend(filters, taeller="forfatterskaber"):
     """Rate pr. forfatter, år for år, pr. statsborgerskabsregion - samme
     princip som _query_koen_rate_trend, generaliseret til alle regioner."""

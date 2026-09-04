@@ -14,7 +14,7 @@ from components.charts import _hls_gradient
 _NIVEAU_EDGE_COL = {"fak": "Edge_type_fak", "inst": "Edge_type_inst", "stil": "Edge_type_stil"}
 _NIVEAU_LABEL = {"fak": "fakultet", "inst": "institut", "stil": "stillingsgruppe"}
 
-@st.cache_data
+@st.cache_data(show_spinner="Henter data...")
 def _query_intra_inter_trend(filters, metric, niveau):
     """
     Intra/inter-fordeling år for år, på det angivne niveau (fak/inst/stil).
@@ -197,7 +197,7 @@ def _samarbejde_base_where(filters):
     return where_sql, params
 
 
-@st.cache_data
+@st.cache_data(show_spinner="Henter data...")
 def _query_internt_samarbejde_by_unit(filters):
     candidates = [
         (filters.get('stillingsgrupper_explicit', False), "stillingsgrupper"),
@@ -319,7 +319,7 @@ def _render_internt_samarbejde_by_unit(filters):
     with _tab_pct:
         _build_and_render("pct")
 
-@st.cache_data
+@st.cache_data(show_spinner="Henter data...")
 def _institut_to_fak_lookup(data_source: str):
     """Majoritetsbaseret Institut -> Fakultet-opslag, udledt direkte af
     par-tabellen selv. Bruges til at farve HVERT institut med dets eget
@@ -342,7 +342,7 @@ def _institut_to_fak_lookup(data_source: str):
     """).fetchall()
     return dict(rows)
 
-@st.cache_data
+@st.cache_data(show_spinner="Henter data...")
 def _query_intra_inter_by_unit(filters, metric, niveau):
     """
     Samme princip som _query_intra_inter_trend, men PR. ORGANISATORISK
@@ -387,7 +387,7 @@ def _query_intra_inter_by_unit(filters, metric, niveau):
             result.setdefault(year, {})[display_label] = cats
     return result
 
-@st.cache_data
+@st.cache_data(show_spinner="Henter data...")
 def _query_alle_pub_by_unit(filters, niveau):
     """Samlet antal ALLE publikationer (inkl. solo) år for år, PR.
     ORGANISATORISK ENHED - matcher samme enheds-fallback-kæde som

@@ -47,7 +47,7 @@ def _org_where(filters, alias="", include_year_range=True):
     params = params + ac_params
     return where_sql, params
 
-@st.cache_data
+@st.cache_data(show_spinner="Henter data...")
 def _query_fwci_by_org(filters, mode):
     """Gennemsnitlig FWCI pr. organisatorisk enhed - tæller DISTINKTE
     publikationer, ikke rå rækker, så en publikation med flere forfattere
@@ -99,7 +99,7 @@ def _query_fwci_by_org(filters, mode):
 
     return result, cluster_map
 
-@st.cache_data
+@st.cache_data(show_spinner="Henter data...")
 def _query_top10_by_org(filters, mode):
     """Andel publikationer i top 10% globalt citerede, pr. enhed - samme
     distinkt-tælling som FWCI-forespørgslen."""
@@ -160,7 +160,7 @@ def _query_top10_by_org(filters, mode):
 
     return result, cluster_map
 
-@st.cache_data
+@st.cache_data(show_spinner="Henter data...")
 def _query_fwci_trend(filters):
     """Gennemsnitlig FWCI år for år for KU samlet (eller det udsnit, der er
     filtreret frem i sidepanelet) - viser altid hele den tilgængelige

@@ -13,7 +13,7 @@ import paramiko
 
 from config import FAC_ORDER, STILLINGSGRUPPER, PARQUET_PATHS, REFERENCE_TABLE_PATHS, hier_cols, doi_filter_sql, author_count_filter, PAIRS_PARQUET_PATHS, FIGUR_CACHE_DIR
 
-@st.cache_resource()
+@st.cache_resource(show_spinner="Henter data...")
 def _sync_parquet_from_erda():
     erda = st.secrets["erda"]
 
@@ -58,7 +58,7 @@ def _sync_parquet_from_erda():
         transport.close()
         print("[ERDA-sync] Forbindelse lukket.", flush=True)
 
-@st.cache_resource()
+@st.cache_resource(show_spinner="Henter data...")
 def _sync_figurer_from_erda():
     """Synkroniserer ALLE .svg-filer fra ERDA's /figurer/-undermappe - i
     modsætning til parquet-filerne er filnavnene her ikke kendt på forhånd,
@@ -88,13 +88,13 @@ def _sync_figurer_from_erda():
         sftp.close()
         transport.close()
 
-@st.cache_resource
+@st.cache_resource(show_spinner="Henter data...")
 def _get_db_for_source(data_source: str):
     conn = duckdb.connect()
     conn.execute(f"CREATE VIEW pubs AS SELECT * FROM read_parquet('{PARQUET_PATHS[data_source]}')")
     return conn
 
-@st.cache_resource
+@st.cache_resource(show_spinner="Henter data...")
 def _get_pairs_db(data_source: str):
     conn = duckdb.connect()
     conn.execute(f"CREATE VIEW pairs AS SELECT * FROM read_parquet('{PAIRS_PARQUET_PATHS[data_source]}')")
@@ -116,7 +116,7 @@ def get_cursor():
     return get_db().cursor()
 
 
-@st.cache_data
+@st.cache_data(show_spinner="Henter data...")
 def load_filter_options(data_source: str) -> dict:
     conn = _get_db_for_source(data_source)
     def distinct(col):
@@ -135,7 +135,7 @@ def load_filter_options(data_source: str) -> dict:
     ).fetchall()],
 }
 
-@st.cache_data
+@st.cache_data(show_spinner="Henter data...")
 def load_sprog_options(year_fra: int, year_til: int) -> list:
     return sorted(
         r[0] for r in get_cursor().execute(
@@ -145,7 +145,7 @@ def load_sprog_options(year_fra: int, year_til: int) -> list:
         ).fetchall()
     )
 
-@st.cache_data
+@st.cache_data(show_spinner="Henter data...")
 def load_institut_options(data_source: str, fakulteter: list) -> list:
     conn = _get_db_for_source(data_source)
     ph = ", ".join(["?" for _ in fakulteter])
@@ -156,7 +156,7 @@ def load_institut_options(data_source: str, fakulteter: list) -> list:
     """
     return [r[0] for r in conn.execute(sql, fakulteter).fetchall()]
 
-@st.cache_data
+@st.cache_data(show_spinner="Henter data...")
 def load_statsborgerskab_options(data_source: str) -> list:
     conn = _get_db_for_source(data_source)
     sql = """
@@ -167,7 +167,7 @@ def load_statsborgerskab_options(data_source: str) -> list:
     return [r[0] for r in conn.execute(sql).fetchall()]
 
 # --- Logo (hentes lokalt) ---
-@st.cache_data
+@st.cache_data(show_spinner="Henter data...")
 def load_logo() -> bytes:
     logo_path = Path(__file__).parent.parent / "KU-logo.png"
     if logo_path.exists():
@@ -217,7 +217,7 @@ def build_pub_query(filters, dims):
     return f"SELECT {group}, COUNT(DISTINCT PURE_ID) AS n FROM pubs {where} GROUP BY {group}", params
 
 
-@st.cache_data
+@st.cache_data(show_spinner="Henter data...")
 def load_org_volume(filters: dict, mode: str) -> list:
     """
     Henter publikationsvolumen for hvert niveau i det valgte organisatoriske
@@ -259,7 +259,7 @@ def load_org_volume(filters: dict, mode: str) -> list:
     rows = get_cursor().execute(sql, params).fetchall()
     return [dict(zip(select_cols, row[:-1]), n=row[-1]) for row in rows]
 
-@st.cache_data
+@st.cache_data(show_spinner="Henter data...")
 def load_author_counts(filters: dict, mode: str) -> dict:
     dims = hier_cols(mode)
     if not dims:
@@ -302,7 +302,7 @@ def load_author_counts(filters: dict, mode: str) -> dict:
 
     return result
 
-@st.cache_data
+@st.cache_data(show_spinner="Henter data...")
 def load_max_author_count(data_source: str, filters: dict) -> int:
     conn = _get_db_for_source(data_source)
     ph = lambda lst: ", ".join(["?" for _ in lst])

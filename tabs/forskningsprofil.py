@@ -86,7 +86,7 @@ def _count_categories(filters, category_sql, extra_filter_sql="1=1", extra_filte
     cats = {c for cats in data.values() for c in cats}
     return len(cats) or 1
 
-@st.cache_data
+@st.cache_data(show_spinner="Henter data...")
 def _query_topic_section(filters, category_sql, extra_filter_sql="1=1", extra_filter_params=()):
     ph = lambda lst: ", ".join(["?" for _ in lst])
     dims = hier_cols(filters.get("mode", "F"))
@@ -164,7 +164,7 @@ def _query_topic_section(filters, category_sql, extra_filter_sql="1=1", extra_fi
     
     return result, cluster_map
 
-@st.cache_data
+@st.cache_data(show_spinner="Henter data...")
 def _query_dim_domain_map(filters, dim_col, extra_filter_sql="1=1", extra_filter_params=()):
     ph = lambda lst: ", ".join(["?" for _ in lst])
     ac_sql, ac_params = author_count_filter(filters['min_forfattere'], filters['max_forfattere'])
@@ -194,7 +194,7 @@ def _query_dim_domain_map(filters, dim_col, extra_filter_sql="1=1", extra_filter
     rows = get_cursor().execute(sql, params).fetchall()
     return {cat: dom for cat, dom in rows}
 
-@st.cache_data
+@st.cache_data(show_spinner="Henter data...")
 def _query_asjc_section(filters, level, restrict_domain=None, restrict_field_abbr=None):
     """
     ASJC er flerværdi pr. publikation - felter, koder og navne er alle
@@ -315,7 +315,7 @@ def _asjc_pct_denominators(filters):
     data, _ = _query_topic_section(filters, "'Alle'")
     return {unit: sum(cats.values()) for unit, cats in data.items()}
 
-@st.cache_data
+@st.cache_data(show_spinner="Henter data...")
 def _query_category_year_trend(filters, category_sql, category_value, extra_filter_sql="1=1", extra_filter_params=()):
     """
     Antal publikationer år for år for ÉN specifik, allerede klikket
@@ -402,7 +402,7 @@ def _query_category_year_trend(filters, category_sql, category_value, extra_filt
     return by_year_unit
 
 
-@st.cache_data
+@st.cache_data(show_spinner="Henter data...")
 def _query_asjc_category_year_trend(filters, level, category_value, restrict_domain=None, restrict_field_abbr=None):
     """Samme princip som _query_category_year_trend (respekterer sidepanelets
     reelle organisatoriske niveau, inkl. institut), men til ASJC's
@@ -582,7 +582,7 @@ def _render_category_trend(trend_data, label, key_suffix, chart_mode="antal", ye
         )
 
 
-@st.cache_data
+@st.cache_data(show_spinner="Henter data...")
 def _query_org_year_totals(filters):
     """Totalt antal publikationer år for år, pr. organisatorisk enhed
     (matchende sidepanelets niveau) - INGEN kategori-restriktion. Bruges
@@ -702,7 +702,7 @@ def _clear_descendants(level_key: str) -> None:
             st.session_state.pop(f"_click_snapshot_{widget_key}", None)
         _clear_descendants(child)
 
-@st.cache_data
+@st.cache_data(show_spinner="Henter data...")
 def _load_scival_reference_table(kind: str):
     """Indlæser de lokalt byggede opslagstabeller (build_scival_reference_tables.py)
     direkte via DuckDB, som en PyArrow-tabel - IKKE pandas, og IKKE noget

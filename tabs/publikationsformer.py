@@ -61,7 +61,7 @@ DOI_LABELS = {"Ja": "Har DOI", "Nej": "Har ikke DOI"}
 def _slugify(text: str) -> str:
     return re.sub(r"[^a-z0-9]+", "_", text.lower()).strip("_")
 
-@st.cache_data
+@st.cache_data(show_spinner="Henter data...")
 def _query_section(filters, mode, category_sql):
     ph = lambda lst: ", ".join(["?" for _ in lst])
     dims = hier_cols(mode)
@@ -137,7 +137,7 @@ def _query_section(filters, mode, category_sql):
 
     return result, cluster_map
 
-@st.cache_data
+@st.cache_data(show_spinner="Henter data...")
 def _query_trend(filters, category_sql):
 
     ph = lambda lst: ", ".join(["?" for _ in lst])
@@ -564,8 +564,8 @@ Fordelingen herunder bygger på CURIS' registrering og er opgjort på tværs af 
 organisatoriske niveauer. **'Ukendt'** dækker publikationer, hvor Open Access-status endnu 
 ikke er registreret.
 
-**Eksempel**: En artikel, der er frit tilgængelig fra udgivelsesdatoen, registreres som 'Open'. 
-En artikel med et forlagspålagt embargo på f.eks. 12 måneder registreres i stedet som 'Embargoed',
+**Eksempel**: En artikel, der er frit tilgængelig fra udgivelsesdatoen, registreres som 'Åben'. 
+En artikel med et forlagspålagt embargo på f.eks. 12 måneder registreres i stedet som 'Embargo',
 indtil embargoperioden udløber. 
 """)
 

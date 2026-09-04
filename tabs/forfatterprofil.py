@@ -76,7 +76,7 @@ def _base_where_and_params(filters):
     )
     return where_sql, params
 
-@st.cache_data
+@st.cache_data(show_spinner="Henter data...")
 def _query_authors(filters, mode, category_sql, count_col="ext_id"):
     """count_col='ext_id' tæller unikke FORFATTERE (KU-ID'er) - en person
     tælles én gang, uanset hvor mange publikationer vedkommende har.
@@ -132,7 +132,7 @@ def _total_unique_authors(filters) -> int:
     sql = f"SELECT COUNT(DISTINCT ext_id) FROM pubs {where_sql}"
     return get_cursor().execute(sql, params).fetchone()[0]
 
-@st.cache_data
+@st.cache_data(show_spinner="Henter data...")
 def _query_stil_totals(filters, mode, count_col="PURE_ID"):
     """Samlet antal DISTINKTE enheder (publikationer eller forfattere) pr.
     organisatorisk enhed, UAFHÆNGIGT af stillingsgruppe - bruges som nævner
@@ -144,7 +144,7 @@ def _query_stil_totals(filters, mode, count_col="PURE_ID"):
     data, _ = _query_authors(filters, mode, "'Alle'", count_col=count_col)
     return {unit: sum(cats.values()) for unit, cats in data.items()}
 
-@st.cache_data
+@st.cache_data(show_spinner="Henter data...")
 def _query_year_totals_by_count(filters, count_col="ext_id"):
     """Samlet antal DISTINKTE enheder pr. år, UAFHÆNGIGT af stillingsgruppe -
     bruges som nævner til trend-fanernes 'Andel (%)', af samme grund som
@@ -179,7 +179,7 @@ def _query_year_totals_by_count(filters, count_col="ext_id"):
     rows = get_cursor().execute(sql, params).fetchall()
     return {year: n for year, n in rows}
 
-@st.cache_data
+@st.cache_data(show_spinner="Henter data...")
 def _query_stil_trend(filters):
     """Antal publicerende forfattere år for år pr. stillingsgruppe."""
     ph = lambda lst: ", ".join(["?" for _ in lst])
@@ -214,7 +214,7 @@ def _query_stil_trend(filters):
         result.setdefault(year, {})[stil] = n
     return result
 
-@st.cache_data
+@st.cache_data(show_spinner="Henter data...")
 def _query_stil_pub_trend(filters):
     """Antal publikationer år for år pr. stillingsgruppe - samme princip som
     _query_stil_trend, men tæller PUBLIKATIONER (PURE_ID), ikke personer."""
@@ -251,7 +251,7 @@ def _query_stil_pub_trend(filters):
     return result
 
 
-@st.cache_data
+@st.cache_data(show_spinner="Henter data...")
 def _query_stil_korr_trend(filters):
     """Antal forfatterskaber og heraf antal korresponderende, år for år pr.
     stillingsgruppe - tæller forfatterskaber (person-publikation-par), ikke
@@ -414,7 +414,7 @@ def _render_stil_trend(filters):
         key="export_trend_stillingsgruppe",
     )
 
-@st.cache_data
+@st.cache_data(show_spinner="Henter data...")
 def _query_korr_by_stil(filters):
     """Andel forfatterskaber med korresponderende forfatter, brudt ned KUN
     på stillingsgruppe - ikke yderligere organisatorisk opdelt. Sidepanelets

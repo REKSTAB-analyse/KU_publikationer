@@ -6,6 +6,15 @@ import streamlit as st
 from config import FAC_ORDER, STILLINGSGRUPPER, doi_filter_sql
 from data.loader import load_sprog_options, load_filter_options, load_max_author_count, load_institut_options, load_statsborgerskab_options
 
+OA_LABELS_DA = {
+    "Open": "Open Access",
+    "Closed": "Lukket adgang",
+    "Restricted": "Begrænset adgang",
+    "Embargoed": "Embargo",
+}
+
+
+
 def render_sidepanel() -> dict:
     """ Viser sdepanel og returnerer aktive filtre som dict"""
 
@@ -126,11 +135,24 @@ publikationstype eller tilføje en diversitetsdimension.
             peer_map = {"Peer reviewed": "Ja", "Ikke peer reviewed": "Nej", "Ukendt": "Ukendt"}
             filters["peer"] = [peer_map[v] for v in valgte_peer] if valgte_peer else ["Ja", "Nej", "Ukendt"]
 
-            valgte_oa = st.multiselect(
+            oa_display_values = [v for v in opts["open_access"] if v != "Unknown"]
+
+            valgte_oa_labels = st.multiselect(
                 "Open access (tom = alle)",
-                options=opts["open_access"], default=[], key="sp_oa",
+                options=[OA_LABELS_DA.get(v, v) for v in oa_display_values] + ["Ukendt"],
+                default=[], key="sp_oa",
             )
-            filters["open_access"] = valgte_oa or opts["open_access"] + [""]
+            oa_reverse_map = {da: en for en, da in OA_LABELS_DA.items()}
+
+            if valgte_oa_labels:
+                filters["open_access"] = []
+                for v in valgte_oa_labels:
+                    if v == "Ukendt":
+                        filters["open_access"] += ["", "Unknown"]
+                    else:
+                        filters["open_access"].append(oa_reverse_map.get(v, v))
+            else:
+                filters["open_access"] = oa_display_values + ["", "Unknown"]
 
             valgte_doi = st.multiselect(
                 "Har DOI (tom = alle)",
