@@ -631,7 +631,7 @@ f"""
 Hvordan har sammensætningen af KU's **publicerende** personale udviklet sig - målt på
 antal forfattere, antal publikationer eller andelen af korresponderende forfatterskaber?
 
-**Bemærk:** hvert år tæller kun det, der reelt er registreret i netop det år - et fald kan
+**Bemærk:** Hvert år tæller kun det, der reelt er registreret i netop det år - et fald kan
 derfor lige så vel skyldes lavere publiceringsaktivitet det år som en reel ændring i
 antal ansatte. 
 

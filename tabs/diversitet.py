@@ -870,6 +870,7 @@ def _render_koen_trend_tab(filters, min_celle=4):
 
     fig = fig_year_trend(
         trend_data, order=_KOEN_ORDER_TREND, colors=KOEN_COLORS, labels=KOEN_LABELS,
+        yaxis_title="Antal forfattere",
         title="Kønsfordeling over tid (hele perioden)",
         mode=chart_mode, hover_unit="forfattere",
     )
@@ -1042,6 +1043,7 @@ def _render_statsbg_pub_trend_tab(filters, min_celle=4):
 
     fig = fig_year_trend(
         trend_data, order=STATSBG_ORDER, colors=STATSBG_COLORS, labels=STATSBG_LABELS,
+        yaxis_title="Antal publikationer",
         title="Publikationer pr. statsborgerskabsregion over tid (hele perioden)",
         mode=chart_mode, hover_unit="publikationer",
         pct_denominators=denom,
@@ -1125,6 +1127,7 @@ def _render_statsbg_trend_tab(filters, min_celle=4):
 
     fig = fig_year_trend(
         trend_data, order=STATSBG_ORDER, colors=STATSBG_COLORS, labels=STATSBG_LABELS,
+        yaxis_title="Antal forfattere",
         title="Statsborgerskabsfordeling over tid (hele perioden)",
         mode=chart_mode, hover_unit="forfattere",
     )
@@ -1165,6 +1168,7 @@ def _render_pub_koen_trend_tab(filters, min_celle=4):
 
     fig = fig_year_trend(
         trend_data, order=_KOEN_ORDER_TREND, colors=KOEN_COLORS, labels=KOEN_LABELS,
+        yaxis_title="Antal publikationer",
         title="Publikationer pr. køn over tid (hele perioden)",
         mode=chart_mode, hover_unit="publikationer",
         pct_denominators=denom,
@@ -1314,9 +1318,6 @@ to selvstændige sektioner, som vælges nedenfor:
 
 Begge sektioner følger samme opbygning: en fordeling, en krydsning med stillingsgruppe, 
 en publikationsbaseret variant og udvikling over tid. 
-
-Enheder, hvor mindst én kategori har **færre end {MIN_CELLE}** repræsenterede, vises ikke - hverken
-i graferne eller i eksport-tabellerne.
 """
     )
 
@@ -1475,10 +1476,6 @@ Graferne dækker altid **hele den tilgængelige periode**, uanset det valgte år
 sidepanelets øvrige filtre gælder stadig. Er intet valgt i sidepanelet, dækker graferne hele
 KU; er f.eks. kun HUM valgt, viser graferne udelukkende udviklingen for HUM. 
 
-**Bemærk:** Enkelte år kan mangle i en linje, hvis mindst ét køn det år havde færre end
-{MIN_CELLE} repræsenterede - resten af perioden vises stadig. Brug derfor linjernes overordnede 
-tendens, ikke enkeltårs absolutte tal, til at vurdere udviklingen. 
-
 {_koen_rate_ku_note}
 """
         )
@@ -1634,10 +1631,6 @@ Udviklingen i statsborgerskabsfordelingen år for år - dækker altid **hele den
 periode**, uanset det valgte årsinterval; sidepanelets øvrige filtre gælder stadig. Samme
 fire faner som ovenfor (Statsborgerskabsfordeling, Publikationer pr. region, og de to
 rate-faner), nu vist som udvikling over tid i stedet for et enkelt øjebliksbillede.
-
-**Bemærk:** enkelte år kan mangle i en linje, hvis mindst én region det år havde færre end
-{MIN_CELLE} repræsenterede - resten af perioden vises stadig. Brug derfor linjernes
-overordnede tendens, ikke enkeltårs absolutte tal, til at vurdere udviklingen.
 
 {_statsbg_stil_note}
 """

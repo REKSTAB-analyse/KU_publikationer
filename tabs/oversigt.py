@@ -206,7 +206,7 @@ def _query_author_trend(filters):
 
     return by_year_unit
 
-def _render_org_trend(trend_data, title, key_suffix):
+def _render_org_trend(trend_data, title, key_suffix, yaxis_title="Antal"):
     """Linjegraf, én linje pr. organisatorisk enhed (eller 'KU samlet') -
     samme princip som Forskningsprofils historik-grafer: KU-rød for
     'KU samlet', faste fakultetsfarver for navngivne fakulteter, enhedens
@@ -263,7 +263,7 @@ def _render_org_trend(trend_data, title, key_suffix):
     fig.update_layout(
         title=dict(text=title, font=dict(size=14)),
         xaxis=dict(title="Udgivelsesår", dtick=1),
-        yaxis=dict(title="Antal"),
+        yaxis=dict(title=yaxis_title),
         plot_bgcolor="white", height=420,
         showlegend=True,
         legend=dict(orientation="v", yanchor="top", y=1.0, xanchor="left", x=1.02),
@@ -389,7 +389,7 @@ Forfatterprofil for detaljer. **Internationalt samarbejde** angiver andelen af p
 medforfatter fra et andet land end Danmark; danske eksterne samarbejdspartnere (f.eks. andre universiteter eller 
 hospitaler) tæller ikke med i dette tal. 
 
-**Eksempel**: er 'Internationalt samarbejde' 35 % betyder det, at 30 % af publikationer har mindst én medforfatter
+**Eksempel**: Er 'Internationalt samarbejde' 35 %, betyder det, at 30 % af publikationer har mindst én medforfatter
 fra et andet land end Danmark - ikke at 35 % af alle medforfattere er udenlandske. 
 
 ---
@@ -407,9 +407,9 @@ hele KU; er f.eks. kun HUM valgt, viser graferne udelukkende udviklingen for HUM
 
     _tab_pub, _tab_auth, _tab_ratio = st.tabs(["Publikationer", "Forfattere", "Publikationer pr. forfatter"])
     with _tab_pub:
-        _render_org_trend(pub_trend, "Antal publikationer over tid (hele perioden)", key_suffix="pub")
+        _render_org_trend(pub_trend, "Antal publikationer over tid (hele perioden)", key_suffix="pub", yaxis_title="Antal publikationer")
     with _tab_auth:
-        _render_org_trend(author_trend, "Antal forfattere over tid (hele perioden)", key_suffix="auth")
+        _render_org_trend(author_trend, "Antal forfattere over tid (hele perioden)", key_suffix="auth", yaxis_title="Antal forfattere")
     with _tab_ratio:
         _render_ratio_trend(pub_trend, author_trend, "Publikationer pr. forfatter over tid (hele perioden)", key_suffix="ratio")
     

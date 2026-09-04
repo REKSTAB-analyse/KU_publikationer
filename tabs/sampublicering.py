@@ -293,7 +293,7 @@ def _render_internt_samarbejde_by_unit(filters):
         fig.update_layout(
             title=dict(text="Internt samarbejde og solo, pr. enhed", font=dict(size=14)),
             xaxis=dict(title="Udgivelsesår", dtick=1),
-            yaxis=dict(title="Andel (%)" if chart_mode == "pct" else "Antal", range=[0, 100] if chart_mode == "pct" else None),
+            yaxis=dict(title="Andel (%)" if chart_mode == "pct" else "Antal publikationer", range=[0, 100] if chart_mode == "pct" else None),
             plot_bgcolor="white", height=460,
             legend=dict(orientation="v", yanchor="top", y=1, xanchor="left", x=1.02),
             margin=dict(t=50, b=10, l=10, r=150),
@@ -484,7 +484,7 @@ def _render_intra_inter_by_unit(filters, metric, niveau, alle_publikationer=Fals
         fig.update_layout(
             title=dict(text=f"Intra vs. inter, pr. enhed ({metric})", font=dict(size=14)),
             xaxis=dict(title="Udgivelsesår", dtick=1),
-            yaxis=dict(title="Andel (%)" if chart_mode == "pct" else "Antal", range=[0, 100] if chart_mode == "pct" else None),
+            yaxis=dict(title="Andel (%)" if chart_mode == "pct" else f"Antal {metric}", range=[0, 100] if chart_mode == "pct" else None),
             plot_bgcolor="white", height=460,
             legend=dict(orientation="v", yanchor="top", y=1, xanchor="left", x=1.02),
             margin=dict(t=50, b=10, l=10, r=150), # 220
@@ -527,6 +527,7 @@ def _render_intra_inter_trend(filters, metric, niveau):
         fig = fig_year_trend(
             trend_data, order=_KLASSE_ORDER, colors=_KLASSE_COLORS, labels=_KLASSE_LABELS,
             title=f"Intra vs. inter af {niveau_navn} over tid ({metric})",
+            yaxis_title=f"Antal {metric}",
             mode="antal", hover_unit=metric,
         )
         st.plotly_chart(fig, width="stretch", config=PLOTLY_CONFIG)
@@ -542,6 +543,7 @@ def _render_intra_inter_trend(filters, metric, niveau):
         fig = fig_year_trend(
             trend_data, order=_KLASSE_ORDER, colors=_KLASSE_COLORS, labels=_KLASSE_LABELS,
             title=f"Intra vs. inter af {niveau_navn} over tid ({metric})",
+            yaxis_title=f"Antal {metric}",
             mode="pct", hover_unit=metric,
         )
         st.plotly_chart(fig, width="stretch", config=PLOTLY_CONFIG)
@@ -693,7 +695,7 @@ Er specifikke stillingsgrupper valgt i sidepanelet, vises ét linjepar pr. valgt
 Er ingen valgt, falder figuren tilbage til institut eller fakultet - og til 'KU samlet',
 hvis intet af det heller er valgt. 
 
-**Bemærk**: uanset hvilken enhed, der vises, er selve intra/inter her altid baseret på 
+**Bemærk**: Uanset hvilken enhed, der vises, er selve intra/inter her altid baseret på 
 **stillingsgruppe**, ikke organisatorisk tilhørsforhold - det ændrer sig ikke, selvom 
 enheden skifter. 
 

@@ -309,7 +309,7 @@ def _asjc_pct_denominators(filters):
     """Antal ALLE distinkte publikationer pr. enhed, uafhængigt af ASJC-status
     - bruges som nævner til 'Andel (%)' på alle tre niveauer (domæne, felt,
     kategori), så et tal direkte kan læses som 'X% af enhedens publikationer
-    i alt'. Bemærk: publikationer uden nogen ASJC-klassifikation tæller
+    i alt'. Bemærk: Publikationer uden nogen ASJC-klassifikation tæller
     stadig med i nævneren, men kan aldrig optræde i nogen tæller - lav
     ASJC-dækning trækker derfor alle procenttal nedad."""
     data, _ = _query_topic_section(filters, "'Alle'")
@@ -1281,7 +1281,7 @@ Topic Cluster-figuren nedenfor viser den bredeste inddeling: klik på en søjle 
 zoome ind på dens Topics. Hver niveau brydes ned på de organisatoriske niveauer, du 
 har valgt i sidepanelet.
 
-**Eksempel**: 45 % 'Cancer Biology' for Sund betyder, at 45 % af SUND's publikationer hører under det
+**Eksempel**: 45 % 'Cancer Biology' for SUND betyder, at 45 % af SUND's publikationer hører under det
 Topic Cluster. Da hver publikation kun hører til ét Topic (og dermed ét Topic Cluster), summerer andelene her
 altid til 100 %. 
 """

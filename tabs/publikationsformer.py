@@ -199,6 +199,7 @@ def _render_trend_tab(filters, category_sql, title_prefix, order=None, colors=No
     fig = fig_year_trend(
         trend_data, order=order, colors=colors, labels=labels,
         title=f"{title_prefix} over tid (hele perioden)",
+        yaxis_title="Antal publikationer",
         mode=chart_mode,
     )
     st.plotly_chart(fig, width="stretch", config=PLOTLY_CONFIG)

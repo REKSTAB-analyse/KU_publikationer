@@ -557,7 +557,8 @@ def _render_ekst_trend(filters):
 
     fig = fig_year_trend(
         trend_data, order=EKST_ORDER, colors=EKST_COLORS, labels=EKST_LABELS,
-        title="Eksternt samarbejde over tid (hele perioden)", mode=chart_mode,
+        title="Eksternt samarbejde over tid (hele perioden)", yaxis_title="Antal publikationer", 
+        mode=chart_mode,
     )
     st.plotly_chart(fig, width="stretch", config=PLOTLY_CONFIG)
 
@@ -595,7 +596,8 @@ def _render_land_trend(filters):
 
     fig = fig_year_trend(
         trend_data, order=order, colors=colors,
-        title="Samarbejdslande over tid (hele perioden)", mode=chart_mode,
+        title="Samarbejdslande over tid (hele perioden)", yaxis_title="Antal publikationer", 
+        mode=chart_mode,
         pct_denominators=year_totals
     )
     st.plotly_chart(fig, width="stretch", config=PLOTLY_CONFIG)
