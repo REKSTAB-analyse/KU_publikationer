@@ -144,6 +144,12 @@ Hold musen over hver boks for at se de præcise tal.
     
     with tabs_dict["Publikationsformer"]:
         tab_pubformer.render(filters)
+    
+    with tabs_dict["Forfatterprofil"]:
+        tab_forfatterprofil.render(filters)
+    
+    with tabs_dict["Diversitet"]:
+        tab_diversitet.render(filters)
  
     with tabs_dict["Forskningsprofil"]:
         tab_forskningsprofil.render(filters)
@@ -160,11 +166,6 @@ Hold musen over hver boks for at se de præcise tal.
     with tabs_dict["Datagrundlag"]:
         tab_datagrundlag.render(filters)
     
-    with tabs_dict["Forfatterprofil"]:
-        tab_forfatterprofil.render(filters)
-
-    with tabs_dict["Diversitet"]:
-        tab_diversitet.render(filters)
     
     # Footer
     st.markdown(f"""

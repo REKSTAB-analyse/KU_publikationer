@@ -6,7 +6,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 import streamlit as st
 import plotly.graph_objects as go
 from data.loader import get_cursor
-from components.charts import fig_hbar_stacked, fig_year_trend, PLOTLY_CONFIG, _build_y_positions, _BAR_WIDTH, _INTRA_GAP, grouped_bar_offsets
+from components.charts import fig_hbar_stacked, fig_year_trend, PLOTLY_CONFIG, _build_y_positions, _BAR_WIDTH, _INTRA_GAP, _INTER_GAP, _n_levels, _divergence_depth, _gap_for_depth, grouped_bar_offsets
 from components.export import render_table_export
 from components.colors import build_faculty_colors, stillingsgruppe_colors
 from config import hier_cols, doi_filter_sql, author_count_filter, show_ku_samlet, year_range_label, breakdown_label, STIL_ORDER, COUNTRY_LOOKUP
@@ -94,7 +94,6 @@ def _filter_suppressed_trend(trend_data, min_celle):
                 if s in cats:
                     result[year][s] = cats[s]
     return result
-
 
 def _base_where(filters, alias=""):
     ph = lambda lst: ", ".join(["?" for _ in lst])
@@ -353,6 +352,36 @@ def _query_statsbg_rate(filters, mode, taeller="forfatterskaber"):
 
     return rate_data, author_data, cluster_map
 
+def _build_collapsed_positions(y_labels, group_keys, n_active_by_label, bar_pitch):
+    """
+    Som _build_y_positions (samme fakultet/institut-mellemrumslogik via
+    _gap_for_depth/_divergence_depth), men hver rækkes egen klyngehøjde
+    afhænger af, hvor mange kategorier DEN enhed rent faktisk har data for
+    - i stedet for samme faste bredde for alle rækker. Tomme kategorier
+    optager derfor ingen plads, og rækker med få resultater "kollapser".
+
+    Returnerer (row_centers, bar_offsets_by_label):
+    - row_centers: liste af y-positioner (samme rækkefølge som y_labels),
+      til brug som tick-position for rækkens label.
+    - bar_offsets_by_label[label]: liste af y-positioner, én pr. aktiv
+      kategori for den enhed, i samme rækkefølge kategorierne blev talt i.
+    """
+    n_levels = _n_levels(group_keys)
+    cursor = 0.0
+    row_centers = []
+    bar_offsets_by_label = {}
+    prev_key = None
+    for i, u in enumerate(y_labels):
+        n = max(n_active_by_label[u], 1)  # mindst 1, så en tom række ikke helt forsvinder
+        if i > 0:
+            depth = _divergence_depth(prev_key, group_keys[i], n_levels)
+            cursor += _gap_for_depth(depth, n_levels)
+        cluster_height = n * bar_pitch
+        row_centers.append(cursor + cluster_height / 2)
+        bar_offsets_by_label[u] = [cursor + (j + 0.5) * bar_pitch for j in range(n)]
+        cursor += cluster_height
+        prev_key = group_keys[i]
+    return row_centers, bar_offsets_by_label
 
 def _render_statsbg_rate(filters, mode, taeller="forfatterskaber", min_celle=4):
     rate_data, author_data, cluster_map = _query_statsbg_rate(filters, mode, taeller=taeller)
@@ -372,36 +401,90 @@ def _render_statsbg_rate(filters, mode, taeller="forfatterskaber", min_celle=4):
     y_labels = list(rate_data.keys())
     group_keys = None
     if any(v is not None for v in cluster_map.values()):
-        group_keys = ["__ku__" if lbl == "KU samlet" else cluster_map.get(lbl, "__single__") for lbl in y_labels]
+        group_keys = [
+            "__ku__" if lbl == "KU samlet" else cluster_map.get(lbl, "__single__")
+            for lbl in y_labels
+        ]
 
     n_kat = len(_STATSBG_RATE_KATEGORIER)
-    row_scale = max(1.0, n_kat / 3)  # flere klyngede søjler pr. række => højere rækker
 
-    if group_keys is not None:
-        y_pos, tick_pos, tick_labels = _build_y_positions(y_labels, group_keys)
-    else:
-        y_pos = list(range(len(y_labels)))
-        tick_pos, tick_labels = y_pos, y_labels
-    y_pos = [y * row_scale for y in y_pos]
-    tick_pos = [y * row_scale for y in tick_pos]
+    if group_keys is None:
+        # Fladt tilfælde (kun fakultet-niveau, ingen institut-nesting) -
+        # brug Plotlys indbyggede barmode="group" i stedet for håndbygget
+        # positionering; det er langt mere robust for jævnt fordelte rækker.
+        fig = go.Figure()
+        for gruppe in _STATSBG_RATE_KATEGORIER:
+            x_vals = [rate_data[u].get(gruppe) for u in y_labels]
+            fig.add_trace(go.Bar(
+                x=x_vals, y=y_labels, orientation="h", name=gruppe,
+                marker=dict(color=STATSBG_COLORS[gruppe], line=dict(color="white", width=1)),
+                text=[f"{v:.2f}" if v is not None else "" for v in x_vals],
+                textposition="inside", insidetextanchor="middle",
+                textfont=dict(color="white", size=9),
+                hovertemplate=f"<b>{gruppe}</b><br>%{{y}}<br>%{{x:.2f}} {taeller_navn} pr. forfatter<extra></extra>",
+            ))
+        height = max(220, len(y_labels) * (n_kat * 26 + 24) + 80)
+        fig.update_layout(
+            title=dict(text=f"{taeller_navn.capitalize()} pr. forfatter, pr. statsborgerskabsregion, {breakdown_label(mode)}", font=dict(size=14)),
+            xaxis=dict(title=f"{taeller_navn.capitalize()} pr. forfatter"),
+            yaxis=dict(autorange="reversed"),
+            barmode="group",
+            bargap=0.15,
+            bargroupgap=0.08,
+            plot_bgcolor="white", height=height,
+            legend=dict(orientation="v", yanchor="middle", y=0.5, xanchor="left", x=1.02),
+            margin=dict(t=50, b=10, l=10, r=150),
+        )
+        st.plotly_chart(fig, width="stretch", config=PLOTLY_CONFIG, key=f"diversitet_statsbg_rate_{taeller}")
+        render_table_export(
+            data=rate_data, row_label="Enhed",
+            filename=f"{taeller}_pr_forfatter_statsbg.xlsx", sheet_name=f"{taeller_navn.capitalize()} pr. statsbg",
+            key=f"export_diversitet_statsbg_rate_{taeller}",
+        )
+        return
 
-    total_span = (y_pos[-1] - y_pos[0]) if len(y_pos) > 1 else 0
-    height = max(200, int(total_span * 55 + 150))
+    # --- Herfra: hierarkisk (Fak+Inst) tilfælde - kollapser tomme kategorier ---
+    _BAR_PITCH = 1.0   # data-enheder pr. søjle-"plads" i en klynge
+    _BAR_PAD = 0.85    # andel af pladsen søjlen selv fylder (resten = luft)
+    bar_width = _BAR_PITCH * _BAR_PAD
+    px_per_unit = 18 / bar_width  # målsøjletykkelse: 18 px
+
+    active_cats_by_label = {
+        u: [c for c in _STATSBG_RATE_KATEGORIER if rate_data[u].get(c) is not None]
+        for u in y_labels
+    }
+    n_active_by_label = {u: len(cats) for u, cats in active_cats_by_label.items()}
+
+    tick_pos, bar_offsets_by_label = _build_collapsed_positions(
+        y_labels, group_keys, n_active_by_label, _BAR_PITCH
+    )
+    tick_labels = y_labels
+
+    total_span = (tick_pos[-1] - tick_pos[0]) if len(tick_pos) > 1 else 0
+    max_cluster_half = max((n * _BAR_PITCH for n in n_active_by_label.values()), default=1) / 2
+    height = max(200, int((total_span + 2 * max_cluster_half) * px_per_unit + 150))
+
     yaxis_kwargs = dict(
         tickmode="array", tickvals=tick_pos, ticktext=tick_labels,
         autorange="reversed", showgrid=False, zeroline=False,
     )
-    offsets, bar_width = grouped_bar_offsets(n_kat, span=_INTRA_GAP * row_scale)
 
     fig = go.Figure()
-    for i, gruppe in enumerate(_STATSBG_RATE_KATEGORIER):
-        y_vals = [y + offsets[i] for y in y_pos]
-        x_vals = [rate_data[u].get(gruppe) for u in y_labels]
+    for gruppe in _STATSBG_RATE_KATEGORIER:
+        y_vals, x_vals = [], []
+        for u in y_labels:
+            if gruppe not in active_cats_by_label[u]:
+                continue
+            idx = active_cats_by_label[u].index(gruppe)
+            y_vals.append(bar_offsets_by_label[u][idx])
+            x_vals.append(rate_data[u][gruppe])
+        if not x_vals:
+            continue
         fig.add_trace(go.Bar(
             x=x_vals, y=y_vals, orientation="h", name=gruppe,
             marker=dict(color=STATSBG_COLORS[gruppe], line=dict(color="white", width=1)),
             width=bar_width,
-            text=[f"{v:.2f}" if v is not None else "" for v in x_vals],
+            text=[f"{v:.2f}" for v in x_vals],
             textposition="inside", insidetextanchor="middle",
             textfont=dict(color="white", size=9),
             hovertemplate=f"<b>{gruppe}</b><br>%{{y}}<br>%{{x:.2f}} {taeller_navn} pr. forfatter<extra></extra>",
@@ -422,7 +505,6 @@ def _render_statsbg_rate(filters, mode, taeller="forfatterskaber", min_celle=4):
         filename=f"{taeller}_pr_forfatter_statsbg.xlsx", sheet_name=f"{taeller_navn.capitalize()} pr. statsbg",
         key=f"export_diversitet_statsbg_rate_{taeller}",
     )
-
 @st.cache_data(show_spinner="Henter data...")
 def _query_koen_rate(filters, mode, taeller="forfatterskaber"):
     """Rate pr. forfatter, pr. køn. taeller='forfatterskaber' tæller hver
@@ -473,23 +555,55 @@ def _render_koen_rate(filters, mode, taeller="forfatterskaber", min_celle=4):
         ]
 
     n_kat = 2  # Kvinder, Mænd
-    row_scale = max(1.0, n_kat / 3)
 
-    if group_keys is not None:
-        y_pos, tick_pos, tick_labels = _build_y_positions(y_labels, group_keys)
-    else:
-        y_pos = list(range(len(y_labels)))
-        tick_pos, tick_labels = y_pos, y_labels
+    if group_keys is None:
+        # Fladt tilfælde (kun fakultet-niveau, ingen institut-nesting) -
+        # brug Plotlys indbyggede barmode="group" i stedet for håndbygget
+        # positionering; det er langt mere robust for jævnt fordelte rækker.
+        fig = go.Figure()
+        for koen in ("Kvinder", "Mænd"):
+            x_vals = [rate_data[u].get(koen) for u in y_labels]
+            fig.add_trace(go.Bar(
+                x=x_vals, y=y_labels, orientation="h", name=koen,
+                marker=dict(color=KOEN_COLORS[koen], line=dict(color="white", width=1)),
+                text=[f"{v:.2f}" if v is not None else "" for v in x_vals],
+                textposition="inside", insidetextanchor="middle",
+                textfont=dict(color="white"),
+                hovertemplate=f"<b>{koen}</b><br>%{{y}}<br>%{{x:.2f}} publikationer pr. forfatter<extra></extra>",
+            ))
+        height = max(220, len(y_labels) * (n_kat * 26 + 24) + 80)
+        fig.update_layout(
+            title=dict(text=f"Publikationer pr. forfatter, pr. køn, {breakdown_label(mode)}", font=dict(size=14)),
+            xaxis=dict(title="Publikationer pr. forfatter"),
+            yaxis=dict(autorange="reversed"),
+            barmode="group",
+            bargap=0.05,
+            bargroupgap=0.08,
+            plot_bgcolor="white", height=height,
+            legend=dict(orientation="v", yanchor="middle", y=0.5, xanchor="left", x=1.02),
+            margin=dict(t=50, b=10, l=10, r=150),
+        )
+        st.plotly_chart(fig, width="stretch", config=PLOTLY_CONFIG, key=f"diversitet_koen_rate_{taeller}")
+        render_table_export(
+            data=rate_data, row_label="Enhed",
+            filename=f"{taeller}_pr_forfatter_koen.xlsx", sheet_name=f"{taeller_navn.capitalize()} pr. køn",
+            key=f"export_diversitet_koen_rate_{taeller}",
+        )
+        return
+
+    # --- Herfra: uændret, hierarkisk (Fak+Inst) tilfælde ---
+    row_scale = max(1.0, n_kat / 3)
+    y_pos, tick_pos, tick_labels = _build_y_positions(y_labels, group_keys)
     y_pos = [y * row_scale for y in y_pos]
     tick_pos = [y * row_scale for y in tick_pos]
 
     total_span = (y_pos[-1] - y_pos[0]) if len(y_pos) > 1 else 0
-    height = max(200, int(total_span * 55 + 150))
+    height = max(200, int(total_span * 75 + 150))
     yaxis_kwargs = dict(
         tickmode="array", tickvals=tick_pos, ticktext=tick_labels,
         autorange="reversed", showgrid=False, zeroline=False,
     )
-    offsets, bar_width = grouped_bar_offsets(n_kat, span=_INTRA_GAP * row_scale)
+    offsets, bar_width = grouped_bar_offsets(n_kat, span=_INTRA_GAP * row_scale, pad=0.95)
 
     fig = go.Figure()
     for i, koen in enumerate(("Kvinder", "Mænd")):
