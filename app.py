@@ -139,32 +139,32 @@ Hold musen over hver boks for at se de præcise tal.
     tabs_dict = dict(zip(tab_labels, tabs))
 
 
-    with tabs_dict["Oversigt"]:
-        tab_oversigt.render(filters)
+    #with tabs_dict["Oversigt"]:
+        #tab_oversigt.render(filters)
     
-    with tabs_dict["Publikationsformer"]:
-        tab_pubformer.render(filters)
+    #with tabs_dict["Publikationsformer"]:
+        #tab_pubformer.render(filters)
     
-    with tabs_dict["Forfatterprofil"]:
-        tab_forfatterprofil.render(filters)
+    #with tabs_dict["Forfatterprofil"]:
+        #tab_forfatterprofil.render(filters)
     
-    with tabs_dict["Diversitet"]:
-        tab_diversitet.render(filters)
+    #with tabs_dict["Diversitet"]:
+        #tab_diversitet.render(filters)
  
-    with tabs_dict["Forskningsprofil"]:
-        tab_forskningsprofil.render(filters)
+    #with tabs_dict["Forskningsprofil"]:
+        #tab_forskningsprofil.render(filters)
     
-    with tabs_dict["Citationsimpact"]:
-        tab_citationsimpact.render(filters)
+    #with tabs_dict["Citationsimpact"]:
+        #tab_citationsimpact.render(filters)
  
-    with tabs_dict["Eksternt samarbejde"]:
-        tab_eksternt.render(filters)
+    #with tabs_dict["Eksternt samarbejde"]:
+        #tab_eksternt.render(filters)
  
     with tabs_dict["Sampublicering"]:
         tab_sampublicering.render(filters)
     
-    with tabs_dict["Datagrundlag"]:
-        tab_datagrundlag.render(filters)
+    #with tabs_dict["Datagrundlag"]:
+        #tab_datagrundlag.render(filters)
     
     
     # Footer
