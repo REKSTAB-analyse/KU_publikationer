@@ -27,6 +27,31 @@ def main():
         layout="wide",
     )
 
+    # --- Synkroniser data fra ERDA, før noget forsøger at læse dem ---
+    if ERDA_ENABLED:
+        _sync_parquet_from_erda()
+        _sync_figurer_from_erda()
+
+    if "popup_bekraeftet" not in st.session_state:
+        st.session_state.popup_bekraeftet = False
+
+    @st.dialog("Velkommen til KU Publikationer")
+    def _velkomst_popup():
+        st.markdown(
+"""
+Forfatternes organisatoriske tilknytning (fakultet, institut, stillingsgruppe) er
+baseret på HR-data, ikke selve publikationsdata. Det betyder, at tallene ikke
+nødvendigvis stemmer overens med de tal, du bliver præsenteret for i andre KU-kilder.
+"""
+        )
+        if st.button("OK", type="primary"):
+            st.session_state.popup_bekraeftet = True
+            st.rerun()
+
+    if not st.session_state.popup_bekraeftet:
+        _velkomst_popup()
+        st.stop()
+
     # --- Skriftstørrelse i widgets (undtagen sidepanelet) ---
     st.markdown(
         """
@@ -44,10 +69,6 @@ def main():
         unsafe_allow_html=True,
     )
 
-    # --- Synkroniser data fra ERDA, før noget forsøger at læse dem ---
-    if ERDA_ENABLED:
-        _sync_parquet_from_erda()
-        _sync_figurer_from_erda()
 
     _mem_mb = psutil.Process(os.getpid()).memory_info().rss / 1024 / 1024
     print(f"[DEBUG] Hukommelse efter ERDA-sync: {_mem_mb:.0f} MB", flush=True)
@@ -62,7 +83,7 @@ def main():
         )
     
     with col_title:
-        st.title("Publikationer på Københavns Universitet")
+        st.title("Publikationer på Københavns Universitet (beta)")
     
     # --- Sidepanel med aktive filtre ---
     filters = render_sidepanel()
@@ -157,11 +178,11 @@ Hold musen over hver boks for at se de præcise tal.
     #with tabs_dict["Citationsimpact"]:
         #tab_citationsimpact.render(filters)
  
-    #with tabs_dict["Eksternt samarbejde"]:
-        #tab_eksternt.render(filters)
+    with tabs_dict["Eksternt samarbejde"]:
+        tab_eksternt.render(filters)
  
-    with tabs_dict["Sampublicering"]:
-        tab_sampublicering.render(filters)
+    #with tabs_dict["Sampublicering"]:
+        #tab_sampublicering.render(filters)
     
     #with tabs_dict["Datagrundlag"]:
         #tab_datagrundlag.render(filters)

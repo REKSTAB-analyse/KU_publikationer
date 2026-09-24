@@ -629,7 +629,7 @@ def _render_kpi_summary(filters, metric):
 
     st.markdown(
 f"""
-##### Nøgletal for den valgte periode
+#### Nøgletal for den valgte periode
 
 Summeret over sidepanelets valgte årsinterval ({filters['aar_fra']}-{filters['aar_til']}),
 talt i **{enhed_flertal}** - indsnævr årsintervallet i sidepanelet for at se tallene for
@@ -959,10 +959,10 @@ def _render_intra_inter_trend(filters, metric, niveau):
         )
 
 def render(filters: dict) -> None:
-    st.subheader("Sampublicering")
-
     st.markdown(
 """
+### Sampublicering
+
 Fanen viser KU's interne sampubliceringsmønstre - hvor meget forskere fra forskellige
 organisatoriske enheder skriver sammen, og hvor meget samarbejdet foregår inden for egen
 enhed (*intra*) versus på tværs af enheder (*inter*). Kun **interne** medforfattere indgår; 
@@ -1015,40 +1015,19 @@ konsortium-artikler vejer tungere end små.
     _metric_arg = "forfatterpar" if _metrik == "Forfatterpar" else "publikationer"
 
     _render_kpi_summary(filters, _metric_arg)
-    st.markdown("---")
 
-    st.markdown(
-"""
-##### Top X samarbejdspar
-
-Rangerer de fakultet- eller institutpar (fx SCIENCE-SUND), der samarbejder mest - "Antal"
-tæller hver forfatterpar/publikation, der krydser netop dette par af enheder; "Andel"
-angiver, hvor stor en del af **alt** tværgående samarbejde på niveauet dette ene par
-udgør. Niveauet (fakultet/institut) følger sidepanelets valg. Bruger sidepanelets valgte
-årsinterval, øvrige filtre gælder stadig.
-"""
-    )
     _mode = filters.get("mode", "F")
     _vis_fak_par = "F" in _mode
     _vis_inst_par = "I" in _mode
 
-    if _vis_fak_par and _vis_inst_par:
-        st.markdown("###### Fakultetsniveau")
-        _render_unit_pairs(filters, _metric_arg, "fak")
-        st.markdown("###### Institutniveau")
-        _render_unit_pairs(filters, _metric_arg, "inst")
-    elif _vis_inst_par:
-        _render_unit_pairs(filters, _metric_arg, "inst")
-    else:
-        _render_unit_pairs(filters, _metric_arg, "fak")
-
+    
     st.markdown("---")
 
     _alle_pub = False
     if _metrik == "Publikationer":
         st.markdown(
 """
-##### Internt samarbejde
+#### Internt samarbejde
 
 Internt samarbejde dækker over publikationer med mindst to interne forfattere - uanset organisatorisk
 tilknytning. Modstykket er 'solo', som er publikationer med kun én intern forfatter. Det implicerer altså, 
@@ -1083,7 +1062,7 @@ hvor stor en del der har SAMF-forfatteren som eneste interne forfatter.
 
     st.markdown(
 """
-##### Fakultet
+#### Fakultet
 
 I det her afsnit fokuserer figuren på samarbejde, der krydser fakultetsgrænserne. 
 **Intra** er her samarbejde inden for samme fakultet, mens **inter** er samarbejde på tværs af to
@@ -1099,10 +1078,10 @@ fakultet eller institut valgt, vises i stedet ét linjepar for 'KU samlet'.
     )
     _render_intra_inter_by_unit(filters, _metric_arg, "fak", alle_publikationer=_alle_pub)
 
-
-    st.markdown("---")
-    st.markdown(
-"""##### Institut
+    if _vis_inst_par:
+        st.markdown("---")
+        st.markdown(
+"""#### Institut
 
 Figuren nedenfor viser samarbejde på tværs af institutgrænserne. **Intra** er samarbejde inden for samme
 institut, mens **inter** er samarbejde på tværs af institutter. 
@@ -1114,12 +1093,12 @@ stadig med institutniveauets intra/inter-opdeling.
 **Eksempel**: Vælger du 'SAMF', viser linjeparret dermed, hvor stor en andel af **hele SAMF's**
 samarbejde der foregår inden for samme institut, versus på tværs af institutter. 
 """
-    )
-    _render_intra_inter_by_unit(filters, _metric_arg, "inst", alle_publikationer=_alle_pub)
+        )
+        _render_intra_inter_by_unit(filters, _metric_arg, "inst", alle_publikationer=_alle_pub)
 
     st.markdown("---")
     st.markdown(
-"""##### Stillingsgruppe
+"""#### Stillingsgruppe
 
 Figuren nedenfor viser samarbejde på tværs af stillingsgrupper. **Intra** viser samarbejde inden for samme
 stillingsgruppe, mens **inter** viser samarbejde på tværs af stillingsgrupper. 
@@ -1145,3 +1124,24 @@ Begge eksempler ovenfor kan selvfølgelig kombineres.
         )
 
     _render_intra_inter_by_unit(filters, _metric_arg, "stil", alle_publikationer=_alle_pub)
+
+    st.markdown(
+"""
+#### Top-x samarbejdspar
+
+Rangerer de fakultet- eller institutpar, der samarbejdet mest. 'Antal' tæller hver publikation/forfatterpar, 
+der krydser fakultets- eller institutskellet; 'Andel' angiver, hvor stor en del af **alt** tværgående
+samarbejde på dette niveau dette ene samarbejdspar udgør. Niveauet (fakultet/institut) fælger sidepanelets
+valg. 
+"""
+    )
+
+    if _vis_fak_par and _vis_inst_par:
+        st.markdown("###### Fakultetsniveau")
+        _render_unit_pairs(filters, _metric_arg, "fak")
+        st.markdown("###### Institutniveau")
+        _render_unit_pairs(filters, _metric_arg, "inst")
+    elif _vis_inst_par:
+        _render_unit_pairs(filters, _metric_arg, "inst")
+    else:
+        _render_unit_pairs(filters, _metric_arg, "fak")
