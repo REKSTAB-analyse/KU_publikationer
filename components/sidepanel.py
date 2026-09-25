@@ -4,8 +4,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import streamlit as st
 from config import FAC_ORDER, STILLINGSGRUPPER, doi_filter_sql
-from data.loader import load_sprog_options, load_filter_options, load_max_author_count, load_institut_options, load_statsborgerskab_options
-
+from data.loader import load_sprog_options, load_filter_options, load_max_author_count, load_institut_options, load_statsborgerskab_options, load_institut_to_fak
 OA_LABELS_DA = {
     "Open": "Open Access",
     "Closed": "Lukket adgang",
@@ -68,16 +67,52 @@ publikationstype eller tilføje en diversitetsdimension.
             mode = ("F" if show_fac else "") + ("I" if show_inst else "")
             filters["mode"] = mode or "G"
 
+            # I FI-mode: er specifikke institutter allerede valgt (fra forrige
+            # kørsel), begrænses Fakultet-multiselecten til KUN de fakulteter,
+            # de valgte institutter reelt hører under - forhindrer en
+            # inkonsistent kombination (fx et institut under SUND valgt, mens
+            # Fakultet stadig står på SCIENCE), som ellers giver et tomt
+            # datasæt og en efterfølgende krascher. Evt. ugyldige, tidligere
+            # fakultetsvalg fjernes samtidig, FØR selve widget'en tegnes.
+            fak_options = FAC_ORDER
+            _fak_afledt_fra_inst = False
+            if show_fac and show_inst:
+                forudvalgte_inst = st.session_state.get("sp_institut", [])
+                if forudvalgte_inst:
+                    inst_to_fak = load_institut_to_fak(data_source)
+                    afledte_fak = sorted({
+                        inst_to_fak[i] for i in forudvalgte_inst if i in inst_to_fak
+                    })
+                    if afledte_fak:
+                        fak_options = afledte_fak
+                        _fak_afledt_fra_inst = True
+                        nuvaerende_fak_valg = st.session_state.get("sp_fakultet", [])
+                        gyldige_fak_valg = [f for f in nuvaerende_fak_valg if f in fak_options]
+                        if gyldige_fak_valg != nuvaerende_fak_valg:
+                            st.session_state["sp_fakultet"] = gyldige_fak_valg
+
             if show_fac:
                 valgte_fak = st.multiselect(
                     "Vælg fakulteter (tom = alle)",
-                    options=FAC_ORDER, default=[], key="sp_fakultet",
+                    options=fak_options, default=[], key="sp_fakultet",
                 )
-                filters["fakultet"] = valgte_fak or FAC_ORDER
-                filters["fakultet_explicit"] = bool(valgte_fak)
+                filters["fakultet"] = valgte_fak or fak_options
+                # 'explicit' er sandt, både hvis brugeren selv har klikket noget,
+                # OG hvis et institutvalg allerede har indsnævret mulighederne -
+                # ellers tror resten af appen fejlagtigt, at intet fakultet er
+                # valgt, selvom listen reelt kun indeholder ét gyldigt fakultet.
+                filters["fakultet_explicit"] = bool(valgte_fak) or _fak_afledt_fra_inst
+                # Separat flag: sandt KUN hvis brugeren selv klikkede i selve
+                # Fakultet-boksen - IKKE hvis fakultetet blot blev afledt af et
+                # institutvalg. Bruges, hvor et REELT fakultetsvalg skal have
+                # anden effekt end et institutvalg, der tilfældigvis kun
+                # matcher ét fakultet (fx sampublicering.py's "institut arver
+                # fra fakultet"-regel).
+                filters["fakultet_explicit_direct"] = bool(valgte_fak)
             else:
                 filters["fakultet"] = FAC_ORDER
                 filters["fakultet_explicit"] = False
+                filters["fakultet_explicit_direct"] = False
 
             if show_inst:
                 institut_opts = load_institut_options(data_source, filters["fakultet"])

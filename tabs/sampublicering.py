@@ -176,6 +176,32 @@ def _query_unit_pairs(filters, metric, niveau, kun_tvaerfakultaert=False):
         result[key] = result.get(key, 0) + n
     return result
 
+def _unit_pairs_change_data(filters, metric, niveau, kun_tvaerfakultaert=False):
+    """Par-udvikling mellem sidepanelets valgte start- og slutår
+    (aar_fra/aar_til) - genbruger _query_unit_pairs_trend (som allerede
+    beregner ALLE pars tal år for år, over hele perioden) og trækker blot
+    de to relevante år ud, i stedet for at bygge en ny SQL-forespørgsel.
+    rel_change er None, hvor n_from = 0 (procentvis vækst er udefineret
+    fra 0)."""
+    year_from, year_to = filters['aar_fra'], filters['aar_til']
+    trend_data_all = _query_unit_pairs_trend(filters, metric, niveau, kun_tvaerfakultaert)
+
+    cats_from = trend_data_all.get(year_from, {})
+    cats_to = trend_data_all.get(year_to, {})
+    all_keys = set(cats_from) | set(cats_to)
+
+    result = []
+    for key in all_keys:
+        n_from = cats_from.get(key, 0)
+        n_to = cats_to.get(key, 0)
+        abs_change = n_to - n_from
+        rel_change = round(100 * (n_to - n_from) / n_from, 1) if n_from > 0 else None
+        result.append({
+            "key": key, "n_from": n_from, "n_to": n_to,
+            "abs_change": abs_change, "rel_change": rel_change,
+        })
+    return result, year_from, year_to
+
 @st.cache_data(show_spinner="Henter data...")
 def _query_unit_pairs_trend(filters, metric, niveau, kun_tvaerfakultaert=False):
     """Samme klassificering som _query_unit_pairs, men ÅR FOR ÅR over HELE
@@ -209,6 +235,20 @@ def _query_unit_pairs_trend(filters, metric, niveau, kun_tvaerfakultaert=False):
         year_dict[key] = year_dict.get(key, 0) + n
     return result
 
+@st.cache_data(show_spinner=False)
+def _institut_to_fak(data_source):
+    """Statisk opslag institut -> moderfakultet, udledt direkte af pairs-
+    tabellens Fak_1/Inst_1 (og Fak_2/Inst_2) - bruges til at lade et
+    eksplicit FAKULTETSVALG 'arve' ned til dets underliggende institutter,
+    når institutparrenes kandidatliste filtreres."""
+    sql = """
+        SELECT DISTINCT Inst_1 AS inst, Fak_1 AS fak FROM pairs WHERE Inst_1 != ''
+        UNION
+        SELECT DISTINCT Inst_2 AS inst, Fak_2 AS fak FROM pairs WHERE Inst_2 != ''
+    """
+    rows = get_pairs_cursor(data_source).execute(sql).fetchall()
+    return {inst: fak for inst, fak in rows}
+
 def _render_unit_pairs(filters, metric, niveau):
     kun_tvaerfak = False
     if niveau == "inst":
@@ -221,7 +261,7 @@ def _render_unit_pairs(filters, metric, niveau):
         kun_tvaerfak = (visning == "Kun institutpar på tværs af fakulteter")
 
     top_x = st.number_input(
-        "Vis top X samarbejdspar", min_value=1, max_value=50, value=4,
+        "Vis top-x samarbejdspar", min_value=1, max_value=50, value=4,
         step=1, key=f"sampub_toppar_n_{niveau}",
     )
 
@@ -230,8 +270,52 @@ def _render_unit_pairs(filters, metric, niveau):
         st.error("Ingen data matcher de valgte filtre.")
         return
 
+    # Nævneren ("Andel af alt tværgående samarbejde") dækker ALTID alle
+    # kvalificerende par, uanset om specifikke enheder er valgt i
+    # sidepanelet. Er der derimod eksplicit valgt fakultet(er)/institut(ter)
+    # på DETTE niveau, begrænses selve KANDIDATLISTEN (det, der rangeres og
+    # vises) til kun par, hvor mindst én af de to enheder er blandt de
+    # valgte - den valgte enhed skal altså udgøre den ene "side" af parret.
     total_alle_par = sum(pairs_data.values()) or 1
-    top_pairs = sorted(pairs_data.items(), key=lambda kv: -kv[1])[:top_x]
+
+    # Fakultetsniveauet begrænses UDELUKKENDE af et eksplicit fakultetsvalg
+    # - et institutvalg påvirker aldrig fakultetsparrene. Institutniveauet
+    # begrænses derimod af BÅDE et eksplicit institutvalg OG et eksplicit
+    # fakultetsvalg - vælges et fakultet, "arver" alle dets underliggende
+    # institutter valget, så deres institutpar også indgår.
+    selected_units = set()
+    if niveau == "fak":
+        if filters.get("fakultet_explicit", False):
+            selected_units = set(filters["fakultet"])
+    else:  # niveau == "inst"
+        if filters.get("institutter_explicit", False):
+            selected_units |= set(filters["institutter"])
+        # Bruger fakultet_explicit_direct (KUN et reelt brugervalg i selve
+        # Fakultet-boksen), ikke fakultet_explicit - ellers ville et
+        # institutvalg, der blot AFLEDER ét fakultet i FI-mode, fejlagtigt
+        # trække ALLE institutter under det afledte fakultet ind, i stedet
+        # for kun det/de faktisk valgte institutter.
+        if filters.get("fakultet_explicit_direct", False):
+            inst_to_fak = _institut_to_fak(filters.get("data_source", "CURIS"))
+            selected_units |= {
+                inst for inst, fak in inst_to_fak.items()
+                if fak in filters["fakultet"]
+            }
+
+    if selected_units:
+        candidate_items = [
+            (key, n) for key, n in pairs_data.items()
+            if key[0] in selected_units or key[1] in selected_units
+        ]
+        st.caption(
+            "Viser kun par, hvor mindst én enhed er blandt de valgte i sidepanelet "
+            "(institutter under et valgt fakultet indgår også). Andelen (%) regnes "
+            "fortsat ud af **alt** tværgående samarbejde på niveauet."
+        )
+    else:
+        candidate_items = list(pairs_data.items())
+
+    top_pairs = sorted(candidate_items, key=lambda kv: -kv[1])[:top_x]
 
     rows = [
         {
@@ -260,10 +344,9 @@ def _render_unit_pairs(filters, metric, niveau):
         #key=f"export_sampub_toppar_{niveau}_{metric}_{kun_tvaerfak}",
     #)
 
-    st.markdown("---")
     st.markdown(
 """
-###### Udvikling for de viste top-samarbejdspar
+##### Udvikling for de viste top-samarbejdspar
 
 Viser, hvordan **netop disse** par har udviklet sig - dækker altid hele den tilgængelige
 periode, uanset sidepanelets valgte årsinterval; øvrige filtre gælder stadig. Ændres top
@@ -327,6 +410,136 @@ def _render_unit_pairs_trend(filters, metric, niveau, kun_tvaerfakultaert, top_p
         _build_and_render("antal")
     with _tab_pct:
         _build_and_render("pct")
+
+def _render_unit_pairs_change(filters, metric, niveau):
+    kun_tvaerfak = False
+    if niveau == "inst":
+        visning = st.radio(
+            "Institutsamarbejde",
+            options=["Alle institutpar", "Kun institutpar på tværs af fakulteter"],
+            index=0, horizontal=True,
+            key=f"sampub_parvaekst_tvaerfak_{niveau}",
+        )
+        kun_tvaerfak = (visning == "Kun institutpar på tværs af fakulteter")
+
+    change_data, year_from, year_to = _unit_pairs_change_data(filters, metric, niveau, kun_tvaerfak)
+    if not change_data or year_from == year_to:
+        st.error("Vælg et årsinterval med mindst to forskellige år i sidepanelet for at se udviklingen.")
+        return
+
+    # Samme asymmetriske arve-logik som _render_unit_pairs: et fakultetsvalg
+    # begrænser BÅDE fakultets- og institutparrene (institutter under det
+    # valgte fakultet arver valget); et institutvalg begrænser KUN
+    # institutparrene, aldrig fakultetsparrene.
+    selected_units = set()
+    if niveau == "fak":
+        if filters.get("fakultet_explicit", False):
+            selected_units = set(filters["fakultet"])
+    else:  # niveau == "inst"
+        if filters.get("institutter_explicit", False):
+            selected_units |= set(filters["institutter"])
+        if filters.get("fakultet_explicit_direct", False):
+            inst_to_fak = _institut_to_fak(filters.get("data_source", "CURIS"))
+            selected_units |= {
+                inst for inst, fak in inst_to_fak.items()
+                if fak in filters["fakultet"]
+            }
+
+    if selected_units:
+        change_data = [
+            r for r in change_data
+            if r["key"][0] in selected_units or r["key"][1] in selected_units
+        ]
+        if not change_data:
+            st.warning("Ingen par matcher de valgte enheder i sidepanelet.")
+            return
+        st.caption(
+            "Viser kun par, hvor mindst én enhed er blandt de valgte i sidepanelet "
+            "(institutter under et valgt fakultet indgår også)."
+        )
+
+    top_x = st.number_input(
+        "Antal par at vise (top voksende + top aftagende)", min_value=1, max_value=25,
+        value=4, step=1, key=f"sampub_parvaekst_n_{niveau}",
+    )
+
+    def _build_and_render(chart_mode):
+        field = "abs_change" if chart_mode == "abs" else "rel_change"
+        rows = [r for r in change_data if r[field] is not None]
+        rows_sorted = sorted(rows, key=lambda r: r[field])
+        top_declining = rows_sorted[:top_x]
+        top_growing = rows_sorted[-top_x:] if rows_sorted else []
+
+        shown, seen = [], set()
+        for r in top_declining + top_growing:
+            if r["key"] not in seen:
+                shown.append(r)
+                seen.add(r["key"])
+        shown.sort(key=lambda r: r[field])
+
+        if not shown:
+            st.warning("Ingen par at vise for denne visning.")
+            return
+
+        labels = [f"{r['key'][0]} ↔ {r['key'][1]}" for r in shown]
+        values = [r[field] for r in shown]
+        colors = ["#901a1e" if v < 0 else "#122947" for v in values]
+        texts = [f"{v:+.1f}" if chart_mode == "abs" else f"{v:+.1f}%" for v in values]
+
+        fig = go.Figure(go.Bar(
+            x=values, y=labels, orientation="h",
+            marker=dict(color=colors),
+            text=texts, textposition="inside", insidetextanchor="middle",
+            textfont=dict(color="white"),
+            hovertemplate="<b>%{y}</b><br>%{text}<extra></extra>",
+        ))
+        fig.update_layout(
+            title=dict(
+                text=f"{'Absolut' if chart_mode == 'abs' else 'Relativ'} vækst i {metric}, {year_from}-{year_to}",
+                font=dict(size=14),
+            ),
+            xaxis=dict(title=f"Ændring i {metric} ({year_from}→{year_to})" if chart_mode == "abs" else "Ændring (%)"),
+            yaxis=dict(autorange="reversed"),
+            plot_bgcolor="white",
+            height=max(200, len(shown) * 30 + 100),
+            margin=dict(t=50, b=10, l=10, r=10),
+        )
+        st.plotly_chart(
+            fig, width="stretch", config=PLOTLY_CONFIG,
+            key=f"sampub_parvaekst_{niveau}_{metric}_{chart_mode}",
+        )
+
+        with st.expander("Se tabel"):
+            table_rows = [
+                {
+                    "Enhed A": r["key"][0], "Enhed B": r["key"][1],
+                    str(year_from): r["n_from"], str(year_to): r["n_to"],
+                    "Absolut ændring": r["abs_change"],
+                    "Relativ ændring (%)": r["rel_change"],
+                }
+                for r in sorted(change_data, key=lambda r: -r["abs_change"])
+            ]
+            st.dataframe(table_rows, width="stretch", hide_index=True)
+            render_table_export(
+                data={
+                    f"{r['key'][0]} - {r['key'][1]}": {
+                        str(year_from): r["n_from"], str(year_to): r["n_to"],
+                        "Absolut ændring": r["abs_change"],
+                        "Relativ ændring (%)": r["rel_change"],
+                    }
+                    for r in change_data
+                },
+                row_label="Samarbejdspar",
+                filename=f"sampub_parvaekst_{niveau}_{metric}_{chart_mode}.xlsx",
+                sheet_name="Par-udvikling",
+                key=f"export_sampub_parvaekst_{niveau}_{metric}_{chart_mode}",
+            )
+
+    _tab_abs, _tab_rel = st.tabs(["Absolut ændring", "Relativ ændring (%)"])
+    with _tab_abs:
+        _build_and_render("abs")
+    with _tab_rel:
+        _build_and_render("rel")
 
 def _current_scope_label(filters):
     """Beskriver den aktuelle afgrænsning på tværs af ALLE tre niveauer, ikke
@@ -968,6 +1181,18 @@ organisatoriske enheder skriver sammen, og hvor meget samarbejdet foregår inden
 enhed (*intra*) versus på tværs af enheder (*inter*). Kun **interne** medforfattere indgår; 
 eksternt samarbejde med ikke-KU-parter dækkes i stedet af fanen **Eksternt samarbejde**. 
 
+Fanen er bygget op i følgende afsnit:
+
+- **Nøgletal for den valgte periode**: antal og andel af internt, intrafakultært/institut
+og interfakultært/institut samarbejde, summeret over sidepanelets valgte årsinterval
+- **Internt samarbejde**: andel af publikationer med mindst to interne forfattere, versus
+solo-publikationer (kun én intern forfatter), pr. enhed
+- **Fakultet / Institut / Stillingsgruppe**: intra- versus inter-fordelingen på hvert
+niveau, udviklet over tid
+- **Top-x samarbejdspar**: hvilke fakultets- eller institutpar, der samarbejder mest
+- **Hvilke samarbejder vokser?**: hvilke par der har haft størst stigning eller fald i
+samarbejde mellem sidepanelets valgte start- og slutår
+
 Vælges OpenAlex eller SciVal som datakilde i sidepanelet, indgår kun de publikationer, der
 er fundet i den pågældende datakilde - samme afgrænsning som resten af appens faner.
 """ 
@@ -1145,3 +1370,27 @@ valg.
         _render_unit_pairs(filters, _metric_arg, "inst")
     else:
         _render_unit_pairs(filters, _metric_arg, "fak")
+    
+    st.markdown("---")
+    st.markdown(
+"""
+#### Hvilke samarbejder vokser?
+
+Figuren viser de par, der har haft den **største stigning** i antal forfatterpar/publikationer
+fra sidepanelets valgte startår til slutår. Positive værdier indikerer voksende samarbejde;
+negative indikerer aftagende.
+
+Den **absolutte** ændring viser den rå forskel i forfatterpar/publikationer. Den **relative**
+ændring viser procentvis vækst - nyttig for at sammenligne par med meget forskellige
+udgangspunkter, men udelader par med 0 i første år.
+"""
+    )
+    if _vis_fak_par and _vis_inst_par:
+        st.markdown("###### Fakultetsniveau")
+        _render_unit_pairs_change(filters, _metric_arg, "fak")
+        st.markdown("###### Institutniveau")
+        _render_unit_pairs_change(filters, _metric_arg, "inst")
+    elif _vis_inst_par:
+        _render_unit_pairs_change(filters, _metric_arg, "inst")
+    else:
+        _render_unit_pairs_change(filters, _metric_arg, "fak")

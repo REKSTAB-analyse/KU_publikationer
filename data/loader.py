@@ -156,6 +156,18 @@ def load_institut_options(data_source: str, fakulteter: list) -> list:
     """
     return [r[0] for r in conn.execute(sql, fakulteter).fetchall()]
 
+@st.cache_data
+def load_institut_to_fak(data_source: str) -> dict:
+    """Institut -> Fakultet-opslag, udledt direkte af pubs - bruges til at
+    lade et allerede valgt institut begrænse, hvilke fakulteter der er
+    valgbare i sidepanelet (FI-mode)."""
+    conn = _get_db_for_source(data_source)
+    sql = """
+        SELECT DISTINCT Inst, Fak FROM pubs
+        WHERE Inst IS NOT NULL AND Inst != '' AND Fak IS NOT NULL AND Fak != ''
+    """
+    return dict(conn.execute(sql).fetchall())
+
 @st.cache_data(show_spinner="Henter data...")
 def load_statsborgerskab_options(data_source: str) -> list:
     conn = _get_db_for_source(data_source)
