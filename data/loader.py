@@ -10,6 +10,7 @@ import subprocess
 from datetime import datetime
 import duckdb
 import paramiko
+import csv
 
 from config import FAC_ORDER, STILLINGSGRUPPER, PARQUET_PATHS, REFERENCE_TABLE_PATHS, hier_cols, doi_filter_sql, author_count_filter, PAIRS_PARQUET_PATHS, FIGUR_CACHE_DIR
 
@@ -177,6 +178,31 @@ def load_statsborgerskab_options(data_source: str) -> list:
         ORDER BY Statsbg
     """
     return [r[0] for r in conn.execute(sql).fetchall()]
+
+@st.cache_data(show_spinner=False)
+def load_stillingsgruppe_loengrupper() -> dict:
+    """Læser den autoritative løngruppe -> stillingsgruppe-mapping fra
+    stillingsgrupper_løngrupper.csv, så Datagrundlag-fanens dokumentation
+    aldrig kan komme ud af trit med selve kildefilen. Returnerer
+    {stillingsgruppe: [(løngruppenavn, løngruppenr), ...]}, sorteret efter
+    løngruppenummer."""
+    path = "H:/Publikationsapp/Data/stillingsgrupper_løngrupper.csv"
+    by_stil = {}
+    with open(path, encoding="utf-8-sig") as f:
+        reader = csv.DictReader(f, delimiter=";")
+        for row in reader:
+            stil = row["Stillingsgruppe"].strip()
+            navn = row["Løngruppe"].strip()
+            try:
+                nr = int(row["Løngruppe nr."].strip())
+            except ValueError:
+                continue
+            if not navn:
+                continue
+            by_stil.setdefault(stil, []).append((navn, nr))
+    for stil in by_stil:
+        by_stil[stil].sort(key=lambda t: t[1])
+    return by_stil
 
 # --- Logo (hentes lokalt) ---
 @st.cache_data(show_spinner="Henter data...")

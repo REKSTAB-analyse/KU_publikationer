@@ -25,6 +25,7 @@ def _org_where(filters, alias="", include_year_range=True):
 
     where_sql = f"""
         WHERE {alias}Intern      = 'Intern'
+          AND {alias}HR_status   IN ('match', 'match_fallback')
           AND {alias}Fak         IN ({ph(filters['fakultet'])})
           AND {alias}Inst        IN ({ph(filters['institutter'])})
           AND {alias}Stil        IN ({ph(filters['stillingsgrupper'])})

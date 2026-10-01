@@ -1,18 +1,109 @@
-from data.loader import get_pairs_cursor
+from data.loader import get_pairs_cursor, _get_db_for_source
 import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 import plotly.graph_objects as go
 
 import streamlit as st
-from config import SAMPUBLICERING_URL, doi_filter_sql, FAC_ORDER
+from config import SAMPUBLICERING_URL, doi_filter_sql, FAC_ORDER, STILLINGSGRUPPER
 from components.charts import fig_year_trend, fig_hbar_stacked, PLOTLY_CONFIG
 from components.export import render_table_export
 from components.colors import build_faculty_colors, ku_color_sequence, stillingsgruppe_colors
 from components.charts import _hls_gradient
 
+TREND_AAR_FRA = 2021
+TREND_AAR_TIL = 2025
+
 _NIVEAU_EDGE_COL = {"fak": "Edge_type_fak", "inst": "Edge_type_inst", "stil": "Edge_type_stil"}
 _NIVEAU_LABEL = {"fak": "fakultet", "inst": "institut", "stil": "stillingsgruppe"}
+
+@st.cache_data(show_spinner="Henter data...")
+def _query_hr_exclusion_impact(filters):
+    """Sammenligner antal INTERNE forfattere pr. publikation i pubs (alle,
+    uanset HR-verifikation) mod antal HR-verificerede interne forfattere,
+    udledt af pairs' rækketal. Kræver et opslag i pubs, fordi pairs kun
+    kender de verificerede - den kan ikke i sig selv svare på, hvor mange
+    der oprindeligt var interne."""
+    curis_conn = _get_db_for_source(filters.get("data_source", "CURIS"))
+    intern_counts = dict(curis_conn.execute("""
+        SELECT PURE_ID, COUNT(*) AS n_intern
+        FROM pubs
+        WHERE Intern = 'Intern' AND Year BETWEEN ? AND ?
+        GROUP BY PURE_ID
+    """, [filters['aar_fra'], filters['aar_til']]).fetchall())
+
+    where_sql, params = _top_units_base_where(filters)
+    data_source = filters.get("data_source", "CURIS")
+    rows = get_pairs_cursor(data_source).execute(f"""
+        SELECT PURE_ID, COUNT(*) AS n_rows
+        FROM pairs {where_sql}
+        GROUP BY PURE_ID
+    """, params).fetchall()
+
+    total = len(rows)
+    ramt = 0
+    for pure_id, n_rows in rows:
+        n_verificeret = 1 if n_rows == 1 else round((1 + (1 + 8 * n_rows) ** 0.5) / 2)
+        n_intern_alle = intern_counts.get(pure_id, n_verificeret)
+        if n_verificeret < n_intern_alle:
+            ramt += 1
+    return {"total": total, "ramt": ramt}
+
+def _pubs_base_where(filters, alias=""):
+    """Samme ikke-organisatoriske filtre som _kpi_base_where (Type, Sprog,
+    Peer_review, Indholdstype, DOI, Open_Access, Antal_forfattere,
+    Year), men UDEN Fak/Inst/Stil-betingelsen og kørt mod pubs
+    (long-formatet) i stedet for pairs. Bruges til at måle publikationer,
+    der slet ikke kan tildeles nogen organisatorisk enhed - de har pr.
+    definition ingen gyldig Fak/Inst/Stil at filtrere på i første omgang."""
+    ph = lambda lst: ", ".join(["?" for _ in lst])
+    where_sql = f"""
+        WHERE {alias}Intern = 'Intern'
+          AND {alias}Year BETWEEN ? AND ?
+          AND {alias}Type IN ({ph(filters['typer'])})
+          AND {alias}Sprog IN ({ph(filters['sprog'])})
+          AND COALESCE(NULLIF({alias}Peer_review, ''), 'Ukendt') IN ({ph(filters['peer'])})
+          AND {alias}Indholdstype IN ({ph(filters['indholdstyper'])})
+          AND ({doi_filter_sql(filters['har_doi']).replace('DOI', f'{alias}DOI')})
+          AND COALESCE({alias}Open_Access, 'Unknown') IN ({ph(filters['open_access'])})
+          AND {alias}Antal_forfattere BETWEEN ? AND ?
+    """
+    params = (
+        [filters['aar_fra'], filters['aar_til']] +
+        filters['typer'] + filters['sprog'] + filters['peer'] +
+        filters['indholdstyper'] + filters['open_access'] +
+        [filters['min_forfattere'], filters['max_forfattere']]
+    )
+    return where_sql, params
+
+
+@st.cache_data(show_spinner="Henter data...")
+def _query_zero_verified_total(filters):
+    """Antal publikationer i perioden, hvor INGEN forfatter er fuldt
+    HR-verificeret (Fak blandt de seks fakulteter OG Stil != 'Ukendt') -
+    samme verifikationskrav som _query_fac_coverage i Datagrundlag og som
+    kravet i create_CURIS_pairs_parquet.py's 'interne'-filter. Denne
+    gruppe findes slet ikke i pairs-filen og kan derfor IKKE opgøres pr.
+    fakultet/institut - de har pr. definition ingen enhed at gruppere på.
+    Vises derfor som ét samlet KU-tal, ikke nedbrudt."""
+    curis_conn = _get_db_for_source(filters.get("data_source", "CURIS"))
+    where_sql, params = _pubs_base_where(filters)
+    ph_fac = ", ".join(["?" for _ in FAC_ORDER])
+
+    total = curis_conn.execute(f"""
+        SELECT COUNT(DISTINCT PURE_ID) FROM pubs {where_sql}
+    """, params).fetchone()[0] or 0
+
+    zero = curis_conn.execute(f"""
+        SELECT COUNT(*) FROM (
+            SELECT PURE_ID FROM pubs {where_sql}
+            GROUP BY PURE_ID
+            HAVING SUM(CASE WHEN Fak IN ({ph_fac}) AND Stil != 'Ukendt'
+                            THEN 1 ELSE 0 END) = 0
+        )
+    """, params + list(FAC_ORDER)).fetchone()[0] or 0
+
+    return {"total": total, "zero": zero}
 
 @st.cache_data(show_spinner="Henter data...")
 def _query_intra_inter_trend(filters, metric, niveau):
@@ -25,7 +116,7 @@ def _query_intra_inter_trend(filters, metric, niveau):
     edge_col = _NIVEAU_EDGE_COL[niveau]
     ph = lambda lst: ", ".join(["?" for _ in lst])
     where_sql = f"""
-        WHERE Year IS NOT NULL
+        WHERE Year BETWEEN ? AND ?
           AND Type        IN ({ph(filters['typer'])})
           AND Sprog       IN ({ph(filters['sprog'])})
           AND COALESCE(NULLIF(Peer_review, ''), 'Ukendt') IN ({ph(filters['peer'])})
@@ -39,6 +130,7 @@ def _query_intra_inter_trend(filters, metric, niveau):
           )
     """
     params = (
+        [TREND_AAR_FRA, TREND_AAR_TIL] +
         filters['typer'] + filters['sprog'] + filters['peer'] +
         filters['indholdstyper'] + filters['open_access'] +
         [filters['min_forfattere'], filters['max_forfattere']] +
@@ -51,6 +143,7 @@ def _query_intra_inter_trend(filters, metric, niveau):
             SELECT Year, {edge_col} AS klasse, COUNT(*) AS n
             FROM pairs
             {where_sql}
+              AND {edge_col} != 'ukendt'
             GROUP BY 1, 2
             ORDER BY 1
         """
@@ -58,15 +151,22 @@ def _query_intra_inter_trend(filters, metric, niveau):
         sql = f"""
             WITH pub_class AS (
                 SELECT PURE_ID, Year,
-                       MAX(CASE WHEN {edge_col} = 'inter' THEN 1 ELSE 0 END) AS has_inter,
-                       MAX(CASE WHEN {edge_col} = 'solo' THEN 1 ELSE 0 END) AS is_solo
+                       MAX(CASE WHEN {edge_col} = 'inter'
+                                THEN 1 ELSE 0 END) AS has_inter,
+                       MAX(CASE WHEN {edge_col} = 'intra'
+                                THEN 1 ELSE 0 END) AS has_intra,
+                       MAX(CASE WHEN {edge_col} = 'solo'
+                                THEN 1 ELSE 0 END) AS is_solo
                 FROM pairs
                 {where_sql}
                 GROUP BY PURE_ID, Year
             )
-            SELECT Year, CASE WHEN has_inter = 1 THEN 'inter' ELSE 'intra' END AS klasse, COUNT(*) AS n
+            SELECT Year,
+                   CASE WHEN has_inter = 1 THEN 'inter'
+                        ELSE 'intra' END AS klasse,
+                   COUNT(*) AS n
             FROM pub_class
-            WHERE is_solo = 0
+            WHERE is_solo = 0 AND (has_inter = 1 OR has_intra = 1)
             GROUP BY 1, 2
             ORDER BY 1
         """
@@ -106,12 +206,12 @@ def _top_units_base_where(filters):
     return where_sql, params
 
 def _top_units_base_where_alltime(filters):
-    """Samme som _top_units_base_where, men UDEN årsinterval-begrænsning -
-    dækker hele den tilgængelige periode, samme princip som fanens øvrige
-    trend-grafer (fx _query_intra_inter_trend)."""
+    """Samme som _top_units_base_where, men begrænset til
+    TREND_AAR_FRA-TREND_AAR_TIL i stedet for sidepanelets valgte interval -
+    dette er trend-forespørgslernes faste periode."""
     ph = lambda lst: ", ".join(["?" for _ in lst])
     where_sql = f"""
-        WHERE Year IS NOT NULL
+        WHERE Year BETWEEN ? AND ?
           AND Type        IN ({ph(filters['typer'])})
           AND Sprog       IN ({ph(filters['sprog'])})
           AND COALESCE(NULLIF(Peer_review, ''), 'Ukendt')
@@ -123,25 +223,36 @@ def _top_units_base_where_alltime(filters):
           AND Antal_forfattere BETWEEN ? AND ?
     """
     params = (
+        [TREND_AAR_FRA, TREND_AAR_TIL] +
         filters['typer'] + filters['sprog'] + filters['peer'] +
         filters['indholdstyper'] + filters['open_access'] +
         [filters['min_forfattere'], filters['max_forfattere']]
     )
     return where_sql, params
 
-_NIVEAU_UNIT_COLS = {"fak": ("Fak_1", "Fak_2"), "inst": ("Inst_1", "Inst_2")}
+_NIVEAU_UNIT_COLS = {
+    "fak": ("Fak_1", "Fak_2"),
+    "inst": ("Inst_1", "Inst_2"),
+    "stil": ("Stil_1", "Stil_2"),
+}
 
 def _unit_pairs_extra_filter(niveau, kun_tvaerfakultaert):
-    """Delt SQL-fragment + parametre til at begrænse fakultetspar
-    (niveau='fak') til de seks FAC_ORDER-definerede fakulteter, og
-    institutpar til kun tværfakultære, når kun_tvaerfakultaert=True -
-    genbruges af BÅDE _query_unit_pairs og _query_unit_pairs_trend, så de
-    to forespørgsler aldrig kan komme ud af trit med hinanden."""
+    """Institut- og fakultetspar begrænses ALTID til FAC_ORDERs seks
+    fakulteter - 'kun tværfakultært' tilføjer derudover kravet om, at de
+    to institutter hører under FORSKELLIGE fakulteter. Stillingsgruppepar
+    begrænses til par, hvor BEGGE parter har en kendt stillingsgruppe -
+    'Ukendt' kan ikke meningsfuldt parres med noget."""
     ph_fac = ", ".join(["?" for _ in FAC_ORDER])
     if niveau == "fak":
         return f" AND Fak_1 IN ({ph_fac}) AND Fak_2 IN ({ph_fac})", list(FAC_ORDER) * 2
-    if niveau == "inst" and kun_tvaerfakultaert:
-        return f" AND Fak_1 != Fak_2 AND Fak_1 IN ({ph_fac}) AND Fak_2 IN ({ph_fac})", list(FAC_ORDER) * 2
+    if niveau == "inst":
+        extra = f" AND Fak_1 IN ({ph_fac}) AND Fak_2 IN ({ph_fac})"
+        params = list(FAC_ORDER) * 2
+        if kun_tvaerfakultaert:
+            extra += " AND Fak_1 != Fak_2"
+        return extra, params
+    if niveau == "stil":
+        return " AND Stil_1 != 'Ukendt' AND Stil_2 != 'Ukendt'", []
     return "", []
 
 @st.cache_data(show_spinner="Henter data...")
@@ -249,6 +360,20 @@ def _institut_to_fak(data_source):
     rows = get_pairs_cursor(data_source).execute(sql).fetchall()
     return {inst: fak for inst, fak in rows}
 
+def _orient_pairs(top_pairs, selected_units):
+    """Sørger for, at en EKSPLICIT valgt enhed altid vises som 'Enhed A' -
+    _query_unit_pairs gemmer hvert par alfabetisk sorteret (u1 < u2),
+    uafhængigt af hvilken side brugeren har valgt i sidepanelet."""
+    if not selected_units:
+        return top_pairs
+    oriented = []
+    for (u1, u2), n in top_pairs:
+        if u1 not in selected_units and u2 in selected_units:
+            oriented.append(((u2, u1), n))
+        else:
+            oriented.append(((u1, u2), n))
+    return oriented
+
 def _render_unit_pairs(filters, metric, niveau):
     kun_tvaerfak = False
     if niveau == "inst":
@@ -287,35 +412,38 @@ def _render_unit_pairs(filters, metric, niveau):
     if niveau == "fak":
         if filters.get("fakultet_explicit", False):
             selected_units = set(filters["fakultet"])
-    else:  # niveau == "inst"
+    elif niveau == "inst":
         if filters.get("institutter_explicit", False):
             selected_units |= set(filters["institutter"])
-        # Bruger fakultet_explicit_direct (KUN et reelt brugervalg i selve
-        # Fakultet-boksen), ikke fakultet_explicit - ellers ville et
-        # institutvalg, der blot AFLEDER ét fakultet i FI-mode, fejlagtigt
-        # trække ALLE institutter under det afledte fakultet ind, i stedet
-        # for kun det/de faktisk valgte institutter.
         if filters.get("fakultet_explicit_direct", False):
             inst_to_fak = _institut_to_fak(filters.get("data_source", "CURIS"))
             selected_units |= {
                 inst for inst, fak in inst_to_fak.items()
                 if fak in filters["fakultet"]
             }
+    else:  # niveau == "stil"
+        if filters.get("stillingsgrupper_explicit", False):
+            selected_units = set(filters["stillingsgrupper"])
 
     if selected_units:
         candidate_items = [
             (key, n) for key, n in pairs_data.items()
             if key[0] in selected_units or key[1] in selected_units
         ]
+        _arve_note = (
+            " (institutter under et valgt fakultet indgår også)"
+            if niveau == "inst" else ""
+        )
         st.caption(
-            "Viser kun par, hvor mindst én enhed er blandt de valgte i sidepanelet "
-            "(institutter under et valgt fakultet indgår også). Andelen (%) regnes "
-            "fortsat ud af **alt** tværgående samarbejde på niveauet."
+            f"Viser kun par, hvor mindst én enhed er blandt de valgte i sidepanelet"
+            f"{_arve_note}. Andelen (%) regnes fortsat ud af **alt** tværgående "
+            "samarbejde på niveauet."
         )
     else:
         candidate_items = list(pairs_data.items())
 
     top_pairs = sorted(candidate_items, key=lambda kv: -kv[1])[:top_x]
+    top_pairs = _orient_pairs(top_pairs, selected_units)
 
     rows = [
         {
@@ -345,12 +473,12 @@ def _render_unit_pairs(filters, metric, niveau):
     #)
 
     st.markdown(
-"""
+f"""
 ##### Udvikling for de viste top-samarbejdspar
 
-Viser, hvordan **netop disse** par har udviklet sig - dækker altid hele den tilgængelige
-periode, uanset sidepanelets valgte årsinterval; øvrige filtre gælder stadig. Ændres top
-X-antallet eller årsintervallet ovenfor, opdateres linjerne til de nye top-par.
+Viser, hvordan **netop disse** par har udviklet sig i {TREND_AAR_FRA}-{TREND_AAR_TIL} -
+uanset sidepanelets valgte årsinterval; øvrige filtre gælder stadig. Ændres top
+X-antallet ovenfor, opdateres linjerne til de nye top-par.
 """
     )
     top_pair_keys = [key for key, _ in top_pairs]
@@ -435,7 +563,7 @@ def _render_unit_pairs_change(filters, metric, niveau):
     if niveau == "fak":
         if filters.get("fakultet_explicit", False):
             selected_units = set(filters["fakultet"])
-    else:  # niveau == "inst"
+    elif niveau == "inst":
         if filters.get("institutter_explicit", False):
             selected_units |= set(filters["institutter"])
         if filters.get("fakultet_explicit_direct", False):
@@ -444,6 +572,9 @@ def _render_unit_pairs_change(filters, metric, niveau):
                 inst for inst, fak in inst_to_fak.items()
                 if fak in filters["fakultet"]
             }
+    else:  # niveau == "stil"
+        if filters.get("stillingsgrupper_explicit", False):
+            selected_units = set(filters["stillingsgrupper"])
 
     if selected_units:
         change_data = [
@@ -453,6 +584,12 @@ def _render_unit_pairs_change(filters, metric, niveau):
         if not change_data:
             st.warning("Ingen par matcher de valgte enheder i sidepanelet.")
             return
+        change_data = [
+            {**r, "key": (r["key"][1], r["key"][0])}
+            if r["key"][0] not in selected_units and r["key"][1] in selected_units
+            else r
+            for r in change_data
+        ]
         st.caption(
             "Viser kun par, hvor mindst én enhed er blandt de valgte i sidepanelet "
             "(institutter under et valgt fakultet indgår også)."
@@ -664,6 +801,7 @@ def _kpi_base_where(filters):
     )
     return where_sql, params
 
+
 @st.cache_data(show_spinner="Henter data...")
 def _query_kpi_summary(filters):
     """Antal solo/intra/inter-publikationer, summeret over sidepanelets
@@ -678,9 +816,16 @@ def _query_kpi_summary(filters):
     sql = f"""
         WITH pub_class AS (
             SELECT PURE_ID,
-                   MAX(CASE WHEN Edge_type_fak = 'inter' THEN 1 ELSE 0 END) AS has_inter_fak,
-                   MAX(CASE WHEN Edge_type_inst = 'inter' THEN 1 ELSE 0 END) AS has_inter_inst,
-                   MAX(CASE WHEN Edge_type_inst = 'solo' THEN 1 ELSE 0 END) AS is_solo
+                   MAX(CASE WHEN Edge_type_fak = 'inter'
+                            THEN 1 ELSE 0 END) AS has_inter_fak,
+                   MAX(CASE WHEN Edge_type_fak = 'intra'
+                            THEN 1 ELSE 0 END) AS has_intra_fak,
+                   MAX(CASE WHEN Edge_type_inst = 'inter'
+                            THEN 1 ELSE 0 END) AS has_inter_inst,
+                   MAX(CASE WHEN Edge_type_inst = 'intra'
+                            THEN 1 ELSE 0 END) AS has_intra_inst,
+                   MAX(CASE WHEN Edge_type_inst = 'solo'
+                            THEN 1 ELSE 0 END) AS is_solo
             FROM pairs
             {where_sql}
             GROUP BY PURE_ID
@@ -688,10 +833,12 @@ def _query_kpi_summary(filters):
         SELECT
             COUNT(*) AS total,
             SUM(is_solo) AS solo_n,
-            SUM(CASE WHEN is_solo = 0 AND has_inter_fak = 0 THEN 1 ELSE 0 END) AS intra_fak_n,
-            SUM(CASE WHEN is_solo = 0 AND has_inter_fak = 1 THEN 1 ELSE 0 END) AS inter_fak_n,
-            SUM(CASE WHEN is_solo = 0 AND has_inter_inst = 0 THEN 1 ELSE 0 END) AS intra_inst_n,
-            SUM(CASE WHEN is_solo = 0 AND has_inter_inst = 1 THEN 1 ELSE 0 END) AS inter_inst_n
+            SUM(CASE WHEN has_intra_fak = 1 AND has_inter_fak = 0
+                     THEN 1 ELSE 0 END) AS intra_fak_n,
+            SUM(has_inter_fak) AS inter_fak_n,
+            SUM(CASE WHEN has_intra_inst = 1 AND has_inter_inst = 0
+                     THEN 1 ELSE 0 END) AS intra_inst_n,
+            SUM(has_inter_inst) AS inter_inst_n
         FROM pub_class
     """
     row = get_pairs_cursor(data_source).execute(sql, params).fetchone()
@@ -739,9 +886,12 @@ def _query_kpi_summary_pairs(filters):
     }
 
 def _samarbejde_base_where(filters):
+    """Bruges af Internt samarbejde-trenden og dens nævner (_query_alle_pub_by_unit) -
+    begrænset til TREND_AAR_FRA-TREND_AAR_TIL, samme princip som de øvrige
+    trend-forespørgsler i fanen."""
     ph = lambda lst: ", ".join(["?" for _ in lst])
     where_sql = f"""
-        WHERE Year IS NOT NULL
+        WHERE Year BETWEEN ? AND ?
           AND Type        IN ({ph(filters['typer'])})
           AND Sprog       IN ({ph(filters['sprog'])})
           AND COALESCE(NULLIF(Peer_review, ''), 'Ukendt') IN ({ph(filters['peer'])})
@@ -755,6 +905,7 @@ def _samarbejde_base_where(filters):
           )
     """
     params = (
+        [TREND_AAR_FRA, TREND_AAR_TIL] +
         filters['typer'] + filters['sprog'] + filters['peer'] +
         filters['indholdstyper'] + filters['open_access'] +
         [filters['min_forfattere'], filters['max_forfattere']] +
@@ -784,14 +935,16 @@ def _query_internt_samarbejde_by_unit(filters):
         sql = f"""
             WITH pub_flags AS (
                 SELECT PURE_ID, Year,
-                       MAX(CASE WHEN Edge_type_inst = 'solo' THEN 1 ELSE 0 END) AS is_solo
+                       MAX(CASE WHEN Edge_type_inst = 'solo' THEN 1 ELSE 0 END) AS is_solo,
+                       MAX(Antal_forfattere) AS n_alle
                 FROM pairs
                 {where_sql}
                 GROUP BY PURE_ID, Year
             )
             SELECT Year, COUNT(*) AS total,
                    SUM(CASE WHEN is_solo = 0 THEN 1 ELSE 0 END) AS internt_n,
-                   SUM(is_solo) AS solo_n
+                   SUM(CASE WHEN is_solo = 1 AND n_alle <= 1 THEN 1 ELSE 0 END) AS solo_ren_n,
+                   SUM(CASE WHEN is_solo = 1 AND n_alle > 1 THEN 1 ELSE 0 END) AS solo_ekstern_n
             FROM pub_flags
             GROUP BY Year
             ORDER BY Year
@@ -801,8 +954,11 @@ def _query_internt_samarbejde_by_unit(filters):
     if units is None:
         rows = _counts(filters)
         result = {}
-        for year, total, internt_n, solo_n in rows:
-            result.setdefault(year, {})[_current_scope_label(filters)] = {"total": total, "internt": internt_n, "solo": solo_n}
+        for year, total, internt_n, solo_ren_n, solo_ekstern_n in rows:
+            result.setdefault(year, {})[_current_scope_label(filters)] = {
+                "total": total, "internt": internt_n,
+                "solo_ren": solo_ren_n, "solo_ekstern": solo_ekstern_n,
+            }
         return result, "fak"
 
     _filter_key_to_niveau = {"stillingsgrupper": "stil", "institutter": "inst", "fakultet": "fak"}
@@ -814,9 +970,188 @@ def _query_internt_samarbejde_by_unit(filters):
         unit_filters[filter_key] = [unit]
         rows = _counts(unit_filters)
         display_label = _full_unit_label(unit, niveau_for_label, filters)
-        for year, total, internt_n, solo_n in rows:
-            result.setdefault(year, {})[display_label] = {"total": total, "internt": internt_n, "solo": solo_n}
+        for year, total, internt_n, solo_ren_n, solo_ekstern_n in rows:
+            result.setdefault(year, {})[display_label] = {
+                "total": total, "internt": internt_n,
+                "solo_ren": solo_ren_n, "solo_ekstern": solo_ekstern_n,
+            }
     return result, niveau_for_label
+
+@st.cache_data(show_spinner="Henter data...")
+def _query_internt_samarbejde_alle_enheder(filters, niveau):
+    """Snapshot af Internt samarbejde / Solo (ren) / Solo (ekstern) for
+    'Hele KU' samt ALLE fakulteter (niveau='fak') eller ALLE fakultet+institut-
+    kombinationer (niveau='fi') - uafhængigt af sidepanelets aktuelle
+    fakultet-/institut-/stillingsgruppevalg. Kun sidepanelets årsinterval og de
+    øvrige, ikke-organisatoriske filtre (Type, Sprog, Peer review, Indholdstype,
+    DOI, Open Access, Antal_forfattere) respekteres stadig. Bruges til
+    download-knappen, så brugeren kan se alle enheder på én gang uden at måtte
+    skifte sidepanelets filtre én enhed ad gangen."""
+    data_source = filters.get("data_source", "CURIS")
+    base_where, base_params = _top_units_base_where(filters)  # ingen org-filter, sidepanelets periode
+
+    def _counts(extra_sql="", extra_params=None):
+        where_sql = base_where + extra_sql
+        params = base_params + (extra_params or [])
+        sql = f"""
+            WITH pub_flags AS (
+                SELECT PURE_ID,
+                       MAX(CASE WHEN Edge_type_inst = 'solo' THEN 1 ELSE 0 END) AS is_solo,
+                       MAX(Antal_forfattere) AS n_alle
+                FROM pairs
+                {where_sql}
+                GROUP BY PURE_ID
+            )
+            SELECT COUNT(*) AS total,
+                   SUM(CASE WHEN is_solo = 0 THEN 1 ELSE 0 END) AS internt_n,
+                   SUM(CASE WHEN is_solo = 1 AND n_alle <= 1 THEN 1 ELSE 0 END) AS solo_ren_n,
+                   SUM(CASE WHEN is_solo = 1 AND n_alle > 1 THEN 1 ELSE 0 END) AS solo_ekstern_n
+            FROM pub_flags
+        """
+        row = get_pairs_cursor(data_source).execute(sql, params).fetchone()
+        total, internt_n, solo_ren_n, solo_ekstern_n = row
+        return {
+            "Internt samarbejde": internt_n or 0,
+            "Solo (ingen medforfattere)": solo_ren_n or 0,
+            "Solo (internt + eksternt)": solo_ekstern_n or 0,
+        }
+
+    result = {"Hele KU": _counts()}
+
+    if niveau == "fak":
+        for fak in FAC_ORDER:
+            result[fak] = _counts(" AND (Fak_1 = ? OR Fak_2 = ?)", [fak, fak])
+    else:  # niveau == "fi": fakultet + institut
+        inst_to_fak = _institut_to_fak_lookup(data_source)
+        by_fak = {}
+        for inst, fak in inst_to_fak.items():
+            if inst:
+                by_fak.setdefault(fak, []).append(inst)
+        for fak in FAC_ORDER:
+            for inst in sorted(by_fak.get(fak, [])):
+                result[f"{fak} {inst}"] = _counts(
+                    " AND ((Fak_1 = ? AND Inst_1 = ?) OR (Fak_2 = ? AND Inst_2 = ?))",
+                    [fak, inst, fak, inst],
+                )
+    return result
+
+
+def _render_internt_samarbejde_export_alle_enheder(filters):
+    _mode = filters.get("mode", "F")
+    if "I" in _mode:
+        niveau, enhedsnavn = "fi", "alle fakultet- og institutkombinationer"
+    else:
+        niveau, enhedsnavn = "fak", "alle fakulteter"
+
+    with st.expander(f"Download: Internt samarbejde for {enhedsnavn} (uanset sidepanelets fakultet-/institutvalg)"):
+        st.caption(
+            "Viser Internt samarbejde, Solo (ingen medforfattere) og Solo (internt + eksternt) "
+            "for hver enhed for sig - uafhængigt af hvilke(t) fakultet(er)/institut(ter), der "
+            f"lige nu er valgt i sidepanelet. Kun sidepanelets årsinterval "
+            f"({filters['aar_fra']}-{filters['aar_til']}) og øvrige filtre "
+            "(Type, Sprog, Peer review osv.) gælder stadig."
+        )
+        data = _query_internt_samarbejde_alle_enheder(filters, niveau)
+        st.dataframe(
+            [{"Enhed": u, **vals} for u, vals in data.items()],
+            width="stretch", hide_index=True,
+        )
+        render_table_export(
+            data=data,
+            row_label="Enhed",
+            filename=f"sampub_internt_samarbejde_{niveau}_alle_enheder.xlsx",
+            sheet_name="Internt samarbejde, alle enheder",
+            key=f"export_internt_samarbejde_alle_enheder_{niveau}",
+        )
+
+_NIVEAU_ENHEDSNAVN = {
+    "fak": "alle fakulteter", "inst": "alle institutter", "stil": "alle stillingsgrupper",
+}
+
+@st.cache_data(show_spinner="Henter data...")
+def _query_intra_inter_alle_enheder(filters, niveau, metric):
+    """Snapshot af Intra/Inter for 'Hele KU' samt ALLE enheder på det angivne
+    niveau (fak/inst/stil) - uafhængigt af sidepanelets aktuelle fakultet-/
+    institut-/stillingsgruppevalg. Samme princip som
+    _query_internt_samarbejde_alle_enheder, men for intra/inter-fordelingen på
+    niveauets EGEN klassifikation (Edge_type_fak/_inst/_stil)."""
+    data_source = filters.get("data_source", "CURIS")
+    edge_col = _NIVEAU_EDGE_COL[niveau]
+    col_1, col_2 = _NIVEAU_UNIT_COLS[niveau]
+    base_where, base_params = _top_units_base_where(filters)  # ingen org-filter, sidepanelets periode
+
+    def _counts(extra_sql="", extra_params=None):
+        where_sql = base_where + extra_sql
+        params = base_params + (extra_params or [])
+        if metric == "forfatterpar":
+            sql = f"""
+                SELECT
+                    SUM(CASE WHEN {edge_col} = 'intra' THEN 1 ELSE 0 END) AS intra_n,
+                    SUM(CASE WHEN {edge_col} = 'inter' THEN 1 ELSE 0 END) AS inter_n
+                FROM pairs {where_sql}
+            """
+        else:  # publikationer
+            sql = f"""
+                WITH pub_class AS (
+                    SELECT PURE_ID,
+                           MAX(CASE WHEN {edge_col} = 'inter' THEN 1 ELSE 0 END) AS has_inter,
+                           MAX(CASE WHEN {edge_col} = 'intra' THEN 1 ELSE 0 END) AS has_intra
+                    FROM pairs {where_sql}
+                    GROUP BY PURE_ID
+                )
+                SELECT
+                    SUM(CASE WHEN has_intra = 1 AND has_inter = 0 THEN 1 ELSE 0 END) AS intra_n,
+                    SUM(has_inter) AS inter_n
+                FROM pub_class
+                WHERE has_inter = 1 OR has_intra = 1
+            """
+        intra_n, inter_n = get_pairs_cursor(data_source).execute(sql, params).fetchone()
+        return {"Intra": intra_n or 0, "Inter": inter_n or 0}
+
+    result = {"Hele KU": _counts()}
+
+    if niveau == "fak":
+        for fak in FAC_ORDER:
+            result[fak] = _counts(f" AND ({col_1} = ? OR {col_2} = ?)", [fak, fak])
+    elif niveau == "inst":
+        inst_to_fak = _institut_to_fak_lookup(data_source)
+        by_fak = {}
+        for inst, fak in inst_to_fak.items():
+            if inst:
+                by_fak.setdefault(fak, []).append(inst)
+        for fak in FAC_ORDER:
+            for inst in sorted(by_fak.get(fak, [])):
+                result[f"{fak} {inst}"] = _counts(
+                    f" AND ({col_1} = ? OR {col_2} = ?)", [inst, inst]
+                )
+    else:  # stil
+        for stil in STILLINGSGRUPPER:
+            result[stil] = _counts(f" AND ({col_1} = ? OR {col_2} = ?)", [stil, stil])
+    return result
+
+
+def _render_intra_inter_export_alle_enheder(filters, metric, niveau):
+    enhedsnavn = _NIVEAU_ENHEDSNAVN[niveau]
+    with st.expander(f"Download: Intra/inter for {enhedsnavn} (uanset sidepanelets valg)"):
+        st.caption(
+            "Viser Intra og Inter for hver enhed for sig, uafhængigt af hvilke(t) "
+            "fakultet(er)/institut(ter)/stillingsgruppe(r), der lige nu er valgt i "
+            f"sidepanelet. Kun sidepanelets årsinterval ({filters['aar_fra']}-"
+            f"{filters['aar_til']}) og øvrige filtre (Type, Sprog, Peer review osv.) "
+            "gælder stadig."
+        )
+        data = _query_intra_inter_alle_enheder(filters, niveau, metric)
+        st.dataframe(
+            [{"Enhed": u, **vals} for u, vals in data.items()],
+            width="stretch", hide_index=True,
+        )
+        render_table_export(
+            data=data,
+            row_label="Enhed",
+            filename=f"sampub_intra_inter_{niveau}_alle_enheder_{metric}.xlsx",
+            sheet_name=f"Intra-inter {niveau}, alle enheder",
+            key=f"export_intra_inter_alle_enheder_{niveau}_{metric}",
+        )
 
 def _render_kpi_summary(filters, metric):
     if metric == "forfatterpar":
@@ -834,6 +1169,9 @@ def _render_kpi_summary(filters, metric):
     def _pct(n):
         return round(100 * n / total, 1)
 
+    zero_data = _query_zero_verified_total(filters)
+    pct_zero = round(100 * zero_data["zero"] / zero_data["total"], 1) if zero_data["total"] else 0
+
     _mode = filters.get("mode", "F")
     _vis_fak = "F" in _mode
     _vis_inst = "I" in _mode
@@ -846,26 +1184,36 @@ f"""
 
 Summeret over sidepanelets valgte årsinterval ({filters['aar_fra']}-{filters['aar_til']}),
 talt i **{enhed_flertal}** - indsnævr årsintervallet i sidepanelet for at se tallene for
-et enkelt år. Andelen (%) regnes ud af alle {enhed_flertal} i perioden (inkl. solo). Solo-
-{enhed_flertal} (kun én intern forfatter) bidrager med **0** til hvert nøgletals tæller,
-men tælles stadig med i nævneren - de trækker derfor andelen (%) nedad, uden selv at
-optræde i noget af de viste antal.
+et enkelt år. Andelen (%) for de første kort regnes ud af alle {enhed_flertal}, DER HAR
+mindst én HR-verificeret forfatter - samme afgrænsning, som resten af appens faner bruger
+konsekvent for organisatoriske analyser. Solo-{enhed_flertal} (kun én intern forfatter)
+bidrager med **0** til hvert nøgletals tæller, men tælles stadig med i nævneren.
+
+**Uden verificeret forfatter** måler noget andet: hvor mange af KU's SAMLEDE interne
+publikationer i perioden der slet ikke har nogen forfatter, appen kan verificere - denne
+gruppe er per definition udelukket fra alle andre kort og grafer i appen, ikke kun her.
+
+**Eksempel**: Har KU 100 interne publikationer i perioden, hvoraf 20 slet ikke har nogen
+HR-verificeret forfatter, regnes "Internt samarbejde" og de øvrige kort ud af de
+resterende 80 - ikke af alle 100. "Uden verificeret forfatter" viser i stedet de 20
+(20 % af alle 100), som slet ikke indgår i nogen andre analyser i appen.
 """
     )
 
-    kort = [("Internt samarbejde", kpi["internt"])]
+    kort = [("Internt samarbejde", kpi["internt"], _pct(kpi["internt"]), enhed_flertal)]
     if _vis_fak:
-        kort.append(("Intrafakultært samarbejde", kpi["intra_fak"]))
-        kort.append(("Interfakultært samarbejde", kpi["inter_fak"]))
+        kort.append(("Intrafakultært samarbejde", kpi["intra_fak"], _pct(kpi["intra_fak"]), enhed_flertal))
+        kort.append(("Interfakultært samarbejde", kpi["inter_fak"], _pct(kpi["inter_fak"]), enhed_flertal))
     if _vis_inst:
-        kort.append(("Intra-institut samarbejde", kpi["intra_inst"]))
-        kort.append(("Inter-institut samarbejde", kpi["inter_inst"]))
+        kort.append(("Intra-institut samarbejde", kpi["intra_inst"], _pct(kpi["intra_inst"]), enhed_flertal))
+        kort.append(("Inter-institut samarbejde", kpi["inter_inst"], _pct(kpi["inter_inst"]), enhed_flertal))
+    kort.append(("Uden verificeret forfatter", zero_data["zero"], pct_zero, "publikationer"))
 
     cols = st.columns(len(kort))
-    for col, (label, n) in zip(cols, kort):
+    for col, (label, n, pct, enhed) in zip(cols, kort):
         with col:
             st.metric(label, f"{n:,}")
-            st.caption(f"{_pct(n)}% af alle {enhed_flertal}")
+            st.caption(f"{pct}% af alle {enhed}")
 
 def _render_internt_samarbejde_by_unit(filters):
     """Solid = Internt samarbejde, stiplet = Solo, farve = enhed - samme
@@ -884,17 +1232,22 @@ def _render_internt_samarbejde_by_unit(filters):
     def _build_and_render(chart_mode):
         fig = go.Figure()
         for unit in units:
-            for klasse, dash in [("internt", None), ("solo", "dash")]:
+            for klasse, dash in [("internt", None), ("solo_ren", "dash"), ("solo_ekstern", "dot")]:
                 y_vals, pct_vals, hover_n = [], [], []
                 for year in years_sorted:
-                    stats = data.get(year, {}).get(unit, {"total": 0, "internt": 0, "solo": 0})
+                    stats = data.get(year, {}).get(
+                        unit, {"total": 0, "internt": 0, "solo_ren": 0, "solo_ekstern": 0})
                     n = stats.get(klasse, 0) or 0
                     total = stats.get("total", 0) or 1
                     pct = round(100 * n / total, 1)
                     y_vals.append(pct if chart_mode == "pct" else n)
                     pct_vals.append(pct)
                     hover_n.append(n)
-                label = "internt samarbejde" if klasse == "internt" else "solo"
+                label = {
+                    "internt": "internt samarbejde",
+                    "solo_ren": "solo (ingen medforfattere)",
+                    "solo_ekstern": "solo internt, eksternt samarbejde",
+                }[klasse]
                 fig.add_trace(go.Scatter(
                     x=years_sorted, y=y_vals, mode="lines+markers",
                     name=f"{unit} ({label})",
@@ -919,7 +1272,7 @@ def _render_internt_samarbejde_by_unit(filters):
             data={
                 str(year): {
                     f"{u} ({k})": data.get(year, {}).get(u, {}).get(k, 0)
-                    for u in units for k in ["internt", "solo"]
+                    for u in units for k in ["internt", "solo_ren", "solo_ekstern"]
                 }
                 for year in years_sorted
             },
@@ -1178,8 +1531,13 @@ def render(filters: dict) -> None:
 
 Fanen viser KU's interne sampubliceringsmønstre - hvor meget forskere fra forskellige
 organisatoriske enheder skriver sammen, og hvor meget samarbejdet foregår inden for egen
-enhed (*intra*) versus på tværs af enheder (*inter*). Kun **interne** medforfattere indgår; 
-eksternt samarbejde med ikke-KU-parter dækkes i stedet af fanen **Eksternt samarbejde**. 
+enhed (*intra*) versus på tværs af enheder (*inter*). Kun forfattere, der er **HR-
+verificerede** (matchet til et fakultet, et institut OG en kendt stillingsgruppe), tæller
+som "interne" her - en forfatter, CURIS markerer [Intern], men som HR-data ikke kan
+bekræfte fuldt ud, tæller IKKE med. En publikation med flere sådanne forfattere kan derfor
+optræde som solo eller helt udeblive fra fanen, selvom CURIS registrerer den med flere
+interne forfattere. Eksternt samarbejde med ikke-KU-parter dækkes i stedet af fanen
+**Eksternt samarbejde**.
 
 Fanen er bygget op i følgende afsnit:
 
@@ -1195,7 +1553,7 @@ samarbejde mellem sidepanelets valgte start- og slutår
 
 Vælges OpenAlex eller SciVal som datakilde i sidepanelet, indgår kun de publikationer, der
 er fundet i den pågældende datakilde - samme afgrænsning som resten af appens faner.
-""" 
+"""
     )
 
     _metrik = st.radio(
@@ -1241,11 +1599,34 @@ konsortium-artikler vejer tungere end små.
 
     _render_kpi_summary(filters, _metric_arg)
 
+    _impact = _query_hr_exclusion_impact(filters)
+    if _impact["total"]:
+        _pct_ramt = 100 * _impact["ramt"] / _impact["total"]
+        st.caption(
+            f"**{_impact['ramt']:,}** af de **{_impact['total']:,}** publikationer, der "
+            f"indgår i denne fane ({_pct_ramt:.1f} %), har mindst én forfatter, der ikke er "
+            "talt med, fordi vedkommende ikke kunne HR-verificeres fuldt ud."
+        )
+
     _mode = filters.get("mode", "F")
     _vis_fak_par = "F" in _mode
     _vis_inst_par = "I" in _mode
 
-    
+    if filters.get('stillingsgrupper_explicit', False):
+        _niveauer_at_vise = ["stil"]
+    elif filters.get('institutter_explicit', False) and _vis_inst_par:
+        _niveauer_at_vise = ["inst"]
+    elif filters.get('fakultet_explicit', False) and _vis_fak_par:
+        _niveauer_at_vise = ["fak"]
+    else:
+        _niveauer_at_vise = [
+            n for n, vis in [("fak", _vis_fak_par), ("inst", _vis_inst_par)] if vis
+        ] + ["stil"]
+
+    _niveau_overskrift = {
+        "fak": "Fakultetsniveau", "inst": "Institutniveau", "stil": "Stillingsgruppeniveau",
+    }
+
     st.markdown("---")
 
     _alle_pub = False
@@ -1254,18 +1635,20 @@ konsortium-artikler vejer tungere end små.
 """
 #### Internt samarbejde
 
-Internt samarbejde dækker over publikationer med mindst to interne forfattere - uanset organisatorisk
-tilknytning. Modstykket er 'solo', som er publikationer med kun én intern forfatter. Det implicerer altså, 
-at publikationer med én KU-forfatter og desuden eksterne forfattere indgår i solo publikationerne. 
+Internt samarbejde dækker over publikationer med mindst to interne forfattere - uanset
+organisatorisk tilknytning. De resterende publikationer (kun én intern forfatter) deles op
+i to grupper:
 
-Er specifikke enheder valgt i sidepanelet, vises ét linjepar pr. valgt enhed. 
+- **Solo (ingen medforfattere)**: publikationen har ingen medforfattere overhovedet.
+- **Solo internt, eksternt samarbejde**: den ene interne forfatter har skrevet sammen med
+mindst én ekstern (ikke-KU) medforfatter - se fanen **Eksternt samarbejde** for en nærmere
+analyse af den type samarbejde.
 
-**Eksempel**: Vælges 'SAMF' i sidepanelet, viser linjeparret, hvor stor en andel af SAMF's publikationer
-der har **mindst to** KU-forfattere (uanset om de begge er fra SAMF), versus
-hvor stor en del der har SAMF-forfatteren som eneste interne forfatter. 
+Er specifikke enheder valgt i sidepanelet, vises ét linjesæt pr. valgt enhed.
 """
         )
         _render_internt_samarbejde_by_unit(filters)
+        _render_internt_samarbejde_export_alle_enheder(filters)
 
         _alle_pub = st.toggle(
             "Andel af alle publikationer",
@@ -1285,7 +1668,10 @@ hvor stor en del der har SAMF-forfatteren som eneste interne forfatter.
         st.markdown("---")
 
 
-    st.markdown(
+    _first_niveau_section = True
+
+    if "fak" in _niveauer_at_vise:
+        st.markdown(
 """
 #### Fakultet
 
@@ -1300,11 +1686,14 @@ en andel af det pågældende instituts samarbejde der krydser fakultetsgrænser.
 fakultet eller institut valgt, vises i stedet ét linjepar for 'KU samlet'.
 
 """
-    )
-    _render_intra_inter_by_unit(filters, _metric_arg, "fak", alle_publikationer=_alle_pub)
+        )
+        _render_intra_inter_by_unit(filters, _metric_arg, "fak", alle_publikationer=_alle_pub)
+        _render_intra_inter_export_alle_enheder(filters, _metric_arg, "fak")
+        _first_niveau_section = False
 
-    if _vis_inst_par:
-        st.markdown("---")
+    if "inst" in _niveauer_at_vise:
+        if not _first_niveau_section:
+            st.markdown("---")
         st.markdown(
 """#### Institut
 
@@ -1320,9 +1709,13 @@ samarbejde der foregår inden for samme institut, versus på tværs af institutt
 """
         )
         _render_intra_inter_by_unit(filters, _metric_arg, "inst", alle_publikationer=_alle_pub)
+        _render_intra_inter_export_alle_enheder(filters, _metric_arg, "inst")
+        _first_niveau_section = False
 
-    st.markdown("---")
-    st.markdown(
+    if "stil" in _niveauer_at_vise:
+        if not _first_niveau_section:
+            st.markdown("---")
+        st.markdown(
 """#### Stillingsgruppe
 
 Figuren nedenfor viser samarbejde på tværs af stillingsgrupper. **Intra** viser samarbejde inden for samme
@@ -1347,8 +1740,9 @@ SAMF's samlede samarbejde, der foregår **inden for samme stillingsgruppe** (int
 Begge eksempler ovenfor kan selvfølgelig kombineres. 
 """
         )
-
-    _render_intra_inter_by_unit(filters, _metric_arg, "stil", alle_publikationer=_alle_pub)
+        _render_intra_inter_by_unit(filters, _metric_arg, "stil", alle_publikationer=_alle_pub)
+        _render_intra_inter_export_alle_enheder(filters, _metric_arg, "stil")
+        _first_niveau_section = False
 
     st.markdown(
 """
@@ -1361,15 +1755,10 @@ valg.
 """
     )
 
-    if _vis_fak_par and _vis_inst_par:
-        st.markdown("###### Fakultetsniveau")
-        _render_unit_pairs(filters, _metric_arg, "fak")
-        st.markdown("###### Institutniveau")
-        _render_unit_pairs(filters, _metric_arg, "inst")
-    elif _vis_inst_par:
-        _render_unit_pairs(filters, _metric_arg, "inst")
-    else:
-        _render_unit_pairs(filters, _metric_arg, "fak")
+    for _niveau in _niveauer_at_vise:
+        if len(_niveauer_at_vise) > 1:
+            st.markdown(f"###### {_niveau_overskrift[_niveau]}")
+        _render_unit_pairs(filters, _metric_arg, _niveau)
     
     st.markdown("---")
     st.markdown(
@@ -1385,12 +1774,7 @@ Den **absolutte** ændring viser den rå forskel i forfatterpar/publikationer. D
 udgangspunkter, men udelader par med 0 i første år.
 """
     )
-    if _vis_fak_par and _vis_inst_par:
-        st.markdown("###### Fakultetsniveau")
-        _render_unit_pairs_change(filters, _metric_arg, "fak")
-        st.markdown("###### Institutniveau")
-        _render_unit_pairs_change(filters, _metric_arg, "inst")
-    elif _vis_inst_par:
-        _render_unit_pairs_change(filters, _metric_arg, "inst")
-    else:
-        _render_unit_pairs_change(filters, _metric_arg, "fak")
+    for _niveau in _niveauer_at_vise:
+        if len(_niveauer_at_vise) > 1:
+            st.markdown(f"###### {_niveau_overskrift[_niveau]}")
+        _render_unit_pairs_change(filters, _metric_arg, _niveau)

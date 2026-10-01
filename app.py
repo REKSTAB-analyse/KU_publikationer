@@ -12,12 +12,14 @@ from config import TABS, hier_cols, FAC_ORDER, FAC_FULL, ERDA_ENABLED
 import tabs.oversigt as tab_oversigt
 import tabs.publikationsformer as tab_pubformer
 import tabs.citationsimpact as tab_citationsimpact
+
 import tabs.forskningsprofil as tab_forskningsprofil
 import tabs.eksternt as tab_eksternt
 import tabs.sampublicering as tab_sampublicering
 import tabs.datagrundlag as tab_datagrundlag
 import tabs.forfatterprofil as tab_forfatterprofil
 from tabs import diversitet as tab_diversitet
+
 
 def main():
     # --- Page config ---
@@ -32,25 +34,26 @@ def main():
         _sync_parquet_from_erda()
         _sync_figurer_from_erda()
 
-    if "popup_bekraeftet" not in st.session_state:
-        st.session_state.popup_bekraeftet = False
 
-    @st.dialog("Velkommen til KU Publikationer")
-    def _velkomst_popup():
-        st.markdown(
-"""
-Forfatternes organisatoriske tilknytning (fakultet, institut, stillingsgruppe) er
-baseret på HR-data, ikke selve publikationsdata. Det betyder, at tallene ikke
-nødvendigvis stemmer overens med de tal, du bliver præsenteret for i andre KU-kilder.
-"""
-        )
-        if st.button("OK", type="primary"):
-            st.session_state.popup_bekraeftet = True
-            st.rerun()
+    #if "popup_bekraeftet" not in st.session_state:
+        #st.session_state.popup_bekraeftet = False
 
-    if not st.session_state.popup_bekraeftet:
-        _velkomst_popup()
-        st.stop()
+    #@st.dialog("Velkommen til KU Publikationer")
+    #def _velkomst_popup():
+        #st.markdown(
+#"""
+#Forfatternes organisatoriske tilknytning (fakultet, institut, stillingsgruppe) er
+#baseret på HR-data, ikke selve publikationsdata. Det betyder, at tallene ikke
+#nødvendigvis stemmer overens med de tal, du bliver præsenteret for i andre KU-kilder.
+#"""
+        #)
+        #if st.button("OK", type="primary"):
+            #st.session_state.popup_bekraeftet = True
+            #st.rerun()
+
+    #if not st.session_state.popup_bekraeftet:
+        #_velkomst_popup()
+        #st.stop()
 
     # --- Skriftstørrelse i widgets (undtagen sidepanelet) ---
     st.markdown(
@@ -68,7 +71,6 @@ nødvendigvis stemmer overens med de tal, du bliver præsenteret for i andre KU-
         """,
         unsafe_allow_html=True,
     )
-
 
     _mem_mb = psutil.Process(os.getpid()).memory_info().rss / 1024 / 1024
     print(f"[DEBUG] Hukommelse efter ERDA-sync: {_mem_mb:.0f} MB", flush=True)

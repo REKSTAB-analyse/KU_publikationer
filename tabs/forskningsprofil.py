@@ -105,6 +105,7 @@ def _query_topic_section(filters, category_sql, extra_filter_sql="1=1", extra_fi
                COUNT(DISTINCT PURE_ID) AS n
         FROM pubs
         WHERE Intern       = 'Intern'
+          AND HR_status    IN ('match', 'match_fallback')
           AND Fak          IN ({ph(filters['fakultet'])})
           AND Inst         IN ({ph(filters['institutter'])})
           AND Stil         IN ({ph(filters['stillingsgrupper'])})
@@ -114,7 +115,7 @@ def _query_topic_section(filters, category_sql, extra_filter_sql="1=1", extra_fi
           AND Indholdstype IN ({ph(filters['indholdstyper'])})
           AND ({doi_filter_sql(filters['har_doi'])})
           AND COALESCE(Open_Access, 'Unknown') IN ({ph(filters['open_access'])})
-          AND Year        BETWEEN ? AND ?
+          AND Year        BETWEEN ? AND ?    -- (i to funktioner: "Year IS NOT NULL" i stedet)
           AND ({ac_sql})
           AND ({extra_filter_sql})
         GROUP BY {group_by}
@@ -145,17 +146,18 @@ def _query_topic_section(filters, category_sql, extra_filter_sql="1=1", extra_fi
             SELECT ({category_sql}) AS cat, COUNT(DISTINCT PURE_ID) AS n
             FROM pubs
             WHERE Intern       = 'Intern'
-              AND Fak          IN ({ph(filters['fakultet'])})
-              AND Inst         IN ({ph(filters['institutter'])})
-              AND Stil         IN ({ph(filters['stillingsgrupper'])})
-              AND Type        IN ({ph(filters['typer'])})
-              AND Sprog       IN ({ph(filters['sprog'])})
-              AND COALESCE(NULLIF(Peer_review, ''), 'Ukendt') IN ({ph(filters['peer'])})
-              AND Indholdstype IN ({ph(filters['indholdstyper'])})
-              AND ({doi_filter_sql(filters['har_doi'])})
-              AND COALESCE(Open_Access, 'Unknown') IN ({ph(filters['open_access'])})
-              AND Year        BETWEEN ? AND ?
-              AND ({ac_sql})
+            AND HR_status    IN ('match', 'match_fallback')
+            AND Fak          IN ({ph(filters['fakultet'])})
+            AND Inst         IN ({ph(filters['institutter'])})
+            AND Stil         IN ({ph(filters['stillingsgrupper'])})
+            AND Type        IN ({ph(filters['typer'])})
+            AND Sprog       IN ({ph(filters['sprog'])})
+            AND COALESCE(NULLIF(Peer_review, ''), 'Ukendt') IN ({ph(filters['peer'])})
+            AND Indholdstype IN ({ph(filters['indholdstyper'])})
+            AND ({doi_filter_sql(filters['har_doi'])})
+            AND COALESCE(Open_Access, 'Unknown') IN ({ph(filters['open_access'])})
+            AND Year        BETWEEN ? AND ?    -- (i to funktioner: "Year IS NOT NULL" i stedet)
+            AND ({ac_sql})
               AND ({extra_filter_sql})
             GROUP BY 1
         """
@@ -172,6 +174,7 @@ def _query_dim_domain_map(filters, dim_col, extra_filter_sql="1=1", extra_filter
         SELECT DISTINCT COALESCE({dim_col}, 'Ukendt') AS cat, COALESCE(Domain, 'Ukendt') AS dom
         FROM pubs
         WHERE Intern       = 'Intern'
+          AND HR_status    IN ('match', 'match_fallback')
           AND Fak          IN ({ph(filters['fakultet'])})
           AND Inst         IN ({ph(filters['institutter'])})
           AND Stil         IN ({ph(filters['stillingsgrupper'])})
@@ -181,7 +184,7 @@ def _query_dim_domain_map(filters, dim_col, extra_filter_sql="1=1", extra_filter
           AND Indholdstype IN ({ph(filters['indholdstyper'])})
           AND ({doi_filter_sql(filters['har_doi'])})
           AND COALESCE(Open_Access, 'Unknown') IN ({ph(filters['open_access'])})
-          AND Year        BETWEEN ? AND ?
+          AND Year        BETWEEN ? AND ?    -- (i to funktioner: "Year IS NOT NULL" i stedet)
           AND ({ac_sql})
           AND ({extra_filter_sql})
     """
@@ -217,6 +220,7 @@ def _query_asjc_section(filters, level, restrict_domain=None, restrict_field_abb
 
     base_where = f"""
         WHERE Intern       = 'Intern'
+          AND HR_status    IN ('match', 'match_fallback')
           AND Fak          IN ({ph(filters['fakultet'])})
           AND Inst         IN ({ph(filters['institutter'])})
           AND Stil         IN ({ph(filters['stillingsgrupper'])})
@@ -226,7 +230,7 @@ def _query_asjc_section(filters, level, restrict_domain=None, restrict_field_abb
           AND Indholdstype IN ({ph(filters['indholdstyper'])})
           AND ({doi_filter_sql(filters['har_doi'])})
           AND COALESCE(Open_Access, 'Unknown') IN ({ph(filters['open_access'])})
-          AND Year        BETWEEN ? AND ?
+          AND Year        BETWEEN ? AND ?    -- (i to funktioner: "Year IS NOT NULL" i stedet)
           AND ({ac_sql})
           AND ASJC_felter IS NOT NULL AND ASJC_felter != ''
     """
@@ -337,6 +341,7 @@ def _query_category_year_trend(filters, category_sql, category_value, extra_filt
         SELECT {dim_select}Year, COUNT(DISTINCT PURE_ID) AS n
         FROM pubs
         WHERE Intern       = 'Intern'
+          AND HR_status    IN ('match', 'match_fallback')
           AND Fak          IN ({ph(filters['fakultet'])})
           AND Inst         IN ({ph(filters['institutter'])})
           AND Stil         IN ({ph(filters['stillingsgrupper'])})
@@ -346,7 +351,7 @@ def _query_category_year_trend(filters, category_sql, category_value, extra_filt
           AND Indholdstype IN ({ph(filters['indholdstyper'])})
           AND ({doi_filter_sql(filters['har_doi'])})
           AND COALESCE(Open_Access, 'Unknown') IN ({ph(filters['open_access'])})
-          AND Year IS NOT NULL
+          AND Year        BETWEEN ? AND ?    -- (i to funktioner: "Year IS NOT NULL" i stedet)
           AND ({ac_sql})
           AND ({extra_filter_sql})
           AND ({category_sql}) = ?
@@ -374,6 +379,7 @@ def _query_category_year_trend(filters, category_sql, category_value, extra_filt
             SELECT Year, COUNT(DISTINCT PURE_ID) AS n
             FROM pubs
             WHERE Intern       = 'Intern'
+              AND HR_status    IN ('match', 'match_fallback')
               AND Fak          IN ({ph(filters['fakultet'])})
               AND Inst         IN ({ph(filters['institutter'])})
               AND Stil         IN ({ph(filters['stillingsgrupper'])})
@@ -418,6 +424,7 @@ def _query_asjc_category_year_trend(filters, level, category_value, restrict_dom
 
     base_where = f"""
         WHERE Intern       = 'Intern'
+          AND HR_status    IN ('match', 'match_fallback')
           AND Fak          IN ({ph(filters['fakultet'])})
           AND Inst         IN ({ph(filters['institutter'])})
           AND Stil         IN ({ph(filters['stillingsgrupper'])})
@@ -597,6 +604,7 @@ def _query_org_year_totals(filters):
         SELECT {dim_select}Year, COUNT(DISTINCT PURE_ID) AS n
         FROM pubs
         WHERE Intern       = 'Intern'
+          AND HR_status    IN ('match', 'match_fallback')
           AND Fak          IN ({ph(filters['fakultet'])})
           AND Inst         IN ({ph(filters['institutter'])})
           AND Stil         IN ({ph(filters['stillingsgrupper'])})
@@ -631,6 +639,7 @@ def _query_org_year_totals(filters):
             SELECT Year, COUNT(DISTINCT PURE_ID) AS n
             FROM pubs
             WHERE Intern       = 'Intern'
+              AND HR_status    IN ('match', 'match_fallback')
               AND Fak          IN ({ph(filters['fakultet'])})
               AND Inst         IN ({ph(filters['institutter'])})
               AND Stil         IN ({ph(filters['stillingsgrupper'])})

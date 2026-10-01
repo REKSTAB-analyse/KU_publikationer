@@ -100,6 +100,7 @@ def _base_where(filters, alias=""):
     ac_sql, ac_params = author_count_filter(filters['min_forfattere'], filters['max_forfattere'])
     where_sql = f"""
         WHERE {alias}Intern       = 'Intern'
+          AND {alias}HR_status    IN ('match', 'match_fallback')
           AND {alias}Fak          IN ({ph(filters['fakultet'])})
           AND {alias}Inst         IN ({ph(filters['institutter'])})
           AND {alias}Stil         IN ({ph(filters['stillingsgrupper'])})
@@ -783,6 +784,7 @@ def _query_koensfordeling_trend(filters):
 
     base_where = f"""
         WHERE Intern      = 'Intern'
+          AND HR_status   IN ('match', 'match_fallback')
           AND Fak         IN ({ph(filters['fakultet'])})
           AND Inst        IN ({ph(filters['institutter'])})
           AND Stil        IN ({ph(filters['stillingsgrupper'])})
@@ -831,6 +833,7 @@ def _query_koen_trend_generic(filters, count_expr):
         SELECT Year, ({_KOEN_CATEGORY_SQL}) AS koen, {count_expr} AS n
         FROM pubs
         WHERE Intern      = 'Intern'
+          AND HR_status   IN ('match', 'match_fallback')
           AND Fak         IN ({ph(filters['fakultet'])})
           AND Inst        IN ({ph(filters['institutter'])})
           AND Stil        IN ({ph(filters['stillingsgrupper'])})
@@ -879,6 +882,7 @@ def _query_pub_total_trend(filters):
         SELECT Year, COUNT(DISTINCT PURE_ID) AS n
         FROM pubs
         WHERE Intern      = 'Intern'
+          AND HR_status   IN ('match', 'match_fallback')
           AND Fak         IN ({ph(filters['fakultet'])})
           AND Inst        IN ({ph(filters['institutter'])})
           AND Stil        IN ({ph(filters['stillingsgrupper'])})
@@ -912,6 +916,7 @@ def _query_koen_stil_trend(filters):
         SELECT Year, Stil, ({_KOEN_CATEGORY_SQL}) AS koen, COUNT(DISTINCT ext_id) AS n
         FROM pubs
         WHERE Intern      = 'Intern'
+          AND HR_status   IN ('match', 'match_fallback')
           AND Fak         IN ({ph(filters['fakultet'])})
           AND Inst        IN ({ph(filters['institutter'])})
           AND Stil        IN ({ph(filters['stillingsgrupper'])})
@@ -1008,6 +1013,7 @@ def _query_statsbg_trend(filters):
         SELECT Year, Statsbg, COUNT(DISTINCT ext_id) AS n
         FROM pubs
         WHERE Intern      = 'Intern'
+          AND HR_status   IN ('match', 'match_fallback')
           AND Fak         IN ({ph(filters['fakultet'])})
           AND Inst        IN ({ph(filters['institutter'])})
           AND Stil        IN ({ph(filters['stillingsgrupper'])})
@@ -1045,6 +1051,7 @@ def _query_statsbg_pub_trend(filters):
         SELECT Year, Statsbg, PURE_ID
         FROM pubs
         WHERE Intern      = 'Intern'
+          AND HR_status   IN ('match', 'match_fallback')
           AND Fak         IN ({ph(filters['fakultet'])})
           AND Inst        IN ({ph(filters['institutter'])})
           AND Stil        IN ({ph(filters['stillingsgrupper'])})
@@ -1082,6 +1089,7 @@ def _query_statsbg_forfatterskaber_trend(filters):
         SELECT Year, Statsbg, COUNT(*) AS n
         FROM pubs
         WHERE Intern      = 'Intern'
+          AND HR_status   IN ('match', 'match_fallback')
           AND Fak         IN ({ph(filters['fakultet'])})
           AND Inst        IN ({ph(filters['institutter'])})
           AND Stil        IN ({ph(filters['stillingsgrupper'])})

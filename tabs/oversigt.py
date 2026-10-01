@@ -16,6 +16,7 @@ def _base_where_and_params(filters, alias=""):
     ac_sql, ac_params = author_count_filter(filters['min_forfattere'], filters['max_forfattere'], alias=alias)
     where_sql = f"""
         WHERE {alias}Intern      = 'Intern'
+          AND {alias}HR_status   IN ('match', 'match_fallback')
           AND {alias}Fak         IN ({ph(filters['fakultet'])})
           AND {alias}Inst        IN ({ph(filters['institutter'])})
           AND {alias}Stil        IN ({ph(filters['stillingsgrupper'])})
@@ -111,6 +112,7 @@ def _query_pub_trend(filters):
 
     base_where = f"""
         WHERE Intern      = 'Intern'
+          AND HR_status   IN ('match', 'match_fallback')
           AND Fak         IN ({ph(filters['fakultet'])})
           AND Inst        IN ({ph(filters['institutter'])})
           AND Stil        IN ({ph(filters['stillingsgrupper'])})
@@ -164,6 +166,7 @@ def _query_author_trend(filters):
 
     base_where = f"""
         WHERE Intern      = 'Intern'
+          AND HR_status   IN ('match', 'match_fallback')
           AND Fak         IN ({ph(filters['fakultet'])})
           AND Inst        IN ({ph(filters['institutter'])})
           AND Stil        IN ({ph(filters['stillingsgrupper'])})

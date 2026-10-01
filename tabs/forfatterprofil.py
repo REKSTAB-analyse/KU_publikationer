@@ -57,6 +57,7 @@ def _base_where_and_params(filters):
     ac_sql, ac_params = author_count_filter(filters['min_forfattere'], filters['max_forfattere'])
     where_sql = f"""
         WHERE Intern       = 'Intern'
+          AND HR_status    IN ('match', 'match_fallback')
           AND Fak          IN ({ph(filters['fakultet'])})
           AND Inst         IN ({ph(filters['institutter'])})
           AND Stil         IN ({ph(filters['stillingsgrupper'])})
@@ -158,6 +159,7 @@ def _query_year_totals_by_count(filters, count_col="ext_id"):
         SELECT Year, COUNT(DISTINCT {count_col}) AS n
         FROM pubs
         WHERE Intern       = 'Intern'
+          AND HR_status    IN ('match', 'match_fallback')
           AND Fak          IN ({ph(filters['fakultet'])})
           AND Inst         IN ({ph(filters['institutter'])})
           AND Stil         IN ({ph(filters['stillingsgrupper'])})
@@ -189,6 +191,7 @@ def _query_stil_trend(filters):
         SELECT Year, COALESCE(Stil, 'Ukendt') AS stil, COUNT(DISTINCT ext_id) AS n
         FROM pubs
         WHERE Intern       = 'Intern'
+          AND HR_status    IN ('match', 'match_fallback')
           AND Fak          IN ({ph(filters['fakultet'])})
           AND Inst         IN ({ph(filters['institutter'])})
           AND Stil         IN ({ph(filters['stillingsgrupper'])})
@@ -225,6 +228,7 @@ def _query_stil_pub_trend(filters):
         SELECT Year, COALESCE(Stil, 'Ukendt') AS stil, COUNT(DISTINCT PURE_ID) AS n
         FROM pubs
         WHERE Intern       = 'Intern'
+          AND HR_status    IN ('match', 'match_fallback')
           AND Fak          IN ({ph(filters['fakultet'])})
           AND Inst         IN ({ph(filters['institutter'])})
           AND Stil         IN ({ph(filters['stillingsgrupper'])})
@@ -265,6 +269,7 @@ def _query_stil_korr_trend(filters):
                SUM(CASE WHEN Korr = 'Ja' THEN 1 ELSE 0 END) AS korr_ja
         FROM pubs
         WHERE Intern       = 'Intern'
+          AND HR_status    IN ('match', 'match_fallback')
           AND Fak          IN ({ph(filters['fakultet'])})
           AND Inst         IN ({ph(filters['institutter'])})
           AND Stil         IN ({ph(filters['stillingsgrupper'])})

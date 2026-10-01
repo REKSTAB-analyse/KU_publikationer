@@ -74,20 +74,34 @@ STILLINGSGRUPPER = [
     "Adjunkt",
     "Postdoc",
     "Ph.d.",
-    "Øvrige VIP (DVIP)",
     "Stillinger u. adjunktniveau",
-    "Særlig stilling"
+    "Særlig stilling",
+    "Øvrige VIP",
+    "Stillinger u. adjunktniveau (DVIP)",
+    "Særlig stilling (DVIP)",
+    "Øvrige VIP (DVIP)",
+    "TAP AS",
+    "TAP FU",
+    "DTAP AS",
+    "DTAP FU",
 ]
 
 HIERARKI = {
+    "TAP AS": 11,
+    "TAP FU": 12,
+    "DTAP AS": 13,
+    "DTAP FU": 14,
+    "Øvrige VIP (DVIP)": 10,
+    "Særlig stilling (DVIP)": 9,
+    "Stillinger u. adjunktniveau (DVIP)": 8,
+    "Øvrige VIP": 7,
     "Særlig stilling": 6,
-    "Øvrige VIP (DVIP)": 5,
+    "Stillinger u. adjunktniveau": 5,
     "Ph.d.": 4,
-    "Stillinger u. adjunktniveau": 3,
-    "Postdoc": 2,
-    "Adjunkt": 1,
-    "Lektor": 0,
-    "Professor": -1
+    "Postdoc": 3,
+    "Adjunkt": 2,
+    "Lektor": 1,
+    "Professor": 0,
 }
 
 STIL_ORDER = sorted(HIERARKI, key=lambda k: HIERARKI[k]) + ["Ukendt"]

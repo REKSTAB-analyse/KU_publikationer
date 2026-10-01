@@ -21,10 +21,13 @@ EKST_LABELS = {"Ja": "Med ekstern samarbejdspartner", "Nej": "Uden ekstern samar
 
 ANDET_LABEL = "Andet"
 
+
+TREND_AAR_FRA = 2021
+TREND_AAR_TIL = 2025
+
 _EXT_EXISTS_SQL = """
     CASE WHEN EXISTS (
         SELECT 1 FROM pubs e WHERE e.PURE_ID = pubs.PURE_ID AND e.Intern = 'Ekstern'
-          AND e.Land IS NOT NULL AND e.Land != ''
     ) THEN 'Ja' ELSE 'Nej' END
 """
 
@@ -45,6 +48,7 @@ def _query_section(filters, mode, category_sql):
 
     where_sql = f"""
         WHERE Intern      = 'Intern'
+          AND HR_status   IN ('match', 'match_fallback')
           AND Fak         IN ({ph(filters['fakultet'])})
           AND Inst        IN ({ph(filters['institutter'])})
           AND Stil        IN ({ph(filters['stillingsgrupper'])})
@@ -120,6 +124,7 @@ def _query_land_by_org(filters, mode):
 
     where_sql = f"""
         WHERE i.Intern      = 'Intern'
+          AND i.HR_status   IN ('match', 'match_fallback')
           AND i.Fak         IN ({ph(filters['fakultet'])})
           AND i.Inst        IN ({ph(filters['institutter'])})
           AND i.Stil        IN ({ph(filters['stillingsgrupper'])})
@@ -131,7 +136,7 @@ def _query_land_by_org(filters, mode):
           AND COALESCE(i.Open_Access, 'Unknown') IN ({ph(filters['open_access'])})
           AND i.Year        BETWEEN ? AND ?
           AND ({ac_sql})
-          AND e.Intern = 'Ekstern' AND e.Land IS NOT NULL AND e.Land != ''
+          AND e.Intern = 'Ekstern'
     """
     base_params = (
         filters['fakultet'] + filters['institutter'] + filters['stillingsgrupper'] +
@@ -142,7 +147,8 @@ def _query_land_by_org(filters, mode):
 
     sql = f"""
         SELECT {select_dims},
-               CASE WHEN e.Land = 'Unknown' THEN 'Ukendt' ELSE e.Land END AS cat,
+               CASE WHEN e.Land IS NULL OR e.Land = '' OR e.Land = 'Unknown'
+                    THEN 'Ukendt' ELSE e.Land END AS cat,
                COUNT(DISTINCT i.PURE_ID) AS n
         FROM pubs i
         JOIN pubs e ON i.PURE_ID = e.PURE_ID
@@ -166,7 +172,8 @@ def _query_land_by_org(filters, mode):
 
     if mode == "F" and show_ku_samlet(filters):
         ku_sql = f"""
-            SELECT CASE WHEN e.Land = 'Unknown' THEN 'Ukendt' ELSE e.Land END AS cat,
+            SELECT CASE WHEN e.Land IS NULL OR e.Land = '' OR e.Land = 'Unknown'
+                        THEN 'Ukendt' ELSE e.Land END AS cat,
                    COUNT(DISTINCT i.PURE_ID) AS n
             FROM pubs i
             JOIN pubs e ON i.PURE_ID = e.PURE_ID
@@ -210,6 +217,7 @@ def _query_country_count(filters, mode):
         FROM pubs i
         JOIN pubs e ON i.PURE_ID = e.PURE_ID
         WHERE i.Intern      = 'Intern'
+          AND i.HR_status   IN ('match', 'match_fallback')
           AND i.Fak         IN ({ph(filters['fakultet'])})
           AND i.Inst        IN ({ph(filters['institutter'])})
           AND i.Stil        IN ({ph(filters['stillingsgrupper'])})
@@ -311,6 +319,7 @@ def _query_countries(filters):
             SELECT DISTINCT PURE_ID
             FROM pubs
             WHERE Intern       = 'Intern'
+              AND HR_status    IN ('match', 'match_fallback')
               AND Fak          IN ({ph(filters['fakultet'])})
               AND Inst         IN ({ph(filters['institutter'])})
               AND Stil         IN ({ph(filters['stillingsgrupper'])})
@@ -323,11 +332,11 @@ def _query_countries(filters):
               AND Year BETWEEN ? AND ?
               AND ({ac_sql})
         )
-        SELECT CASE WHEN e.Land = 'Unknown' THEN 'Ukendt' ELSE e.Land END AS Land,
+        SELECT CASE WHEN e.Land IS NULL OR e.Land = '' OR e.Land = 'Unknown'
+                    THEN 'Ukendt' ELSE e.Land END AS Land,
                COUNT(DISTINCT e.PURE_ID) AS n
         FROM pubs e
         WHERE e.Intern = 'Ekstern'
-          AND e.Land IS NOT NULL AND e.Land != ''
           AND e.PURE_ID IN (SELECT PURE_ID FROM intern_match)
         GROUP BY 1
     """
@@ -352,6 +361,7 @@ def _query_ekst_trend(filters):
         SELECT Year, ({_EXT_EXISTS_SQL}) AS cat, COUNT(DISTINCT PURE_ID) AS n
         FROM pubs
         WHERE Intern      = 'Intern'
+          AND HR_status   IN ('match', 'match_fallback')
           AND Fak         IN ({ph(filters['fakultet'])})
           AND Inst        IN ({ph(filters['institutter'])})
           AND Stil        IN ({ph(filters['stillingsgrupper'])})
@@ -361,7 +371,7 @@ def _query_ekst_trend(filters):
           AND Indholdstype IN ({ph(filters['indholdstyper'])})
           AND ({doi_filter_sql(filters['har_doi'])})
           AND COALESCE(Open_Access, 'Unknown') IN ({ph(filters['open_access'])})
-          AND Year IS NOT NULL
+          AND Year BETWEEN ? AND ?
           AND ({ac_sql})
         GROUP BY 1, 2
         ORDER BY 1
@@ -370,7 +380,7 @@ def _query_ekst_trend(filters):
         filters['fakultet'] + filters['institutter'] + filters['stillingsgrupper'] +
         filters['typer'] + filters['sprog'] +
         filters['peer'] + filters['indholdstyper'] + filters['open_access'] +
-        ac_params
+        [TREND_AAR_FRA, TREND_AAR_TIL] + ac_params
     )
     rows = get_cursor().execute(sql, params).fetchall()
 
@@ -389,11 +399,13 @@ def _query_land_trend(filters):
 
     sql = f"""
         SELECT i.Year,
-               CASE WHEN e.Land = 'Unknown' THEN 'Ukendt' ELSE e.Land END AS raw_land,
+               CASE WHEN e.Land IS NULL OR e.Land = '' OR e.Land = 'Unknown'
+                    THEN 'Ukendt' ELSE e.Land END AS raw_land,
                COUNT(DISTINCT i.PURE_ID) AS n
         FROM pubs i
         JOIN pubs e ON i.PURE_ID = e.PURE_ID
         WHERE i.Intern      = 'Intern'
+          AND i.HR_status   IN ('match', 'match_fallback')
           AND i.Fak         IN ({ph(filters['fakultet'])})
           AND i.Inst        IN ({ph(filters['institutter'])})
           AND i.Stil        IN ({ph(filters['stillingsgrupper'])})
@@ -403,9 +415,9 @@ def _query_land_trend(filters):
           AND i.Indholdstype IN ({ph(filters['indholdstyper'])})
           AND ({doi_filter_sql(filters['har_doi']).replace('DOI', 'i.DOI')})
           AND COALESCE(i.Open_Access, 'Unknown') IN ({ph(filters['open_access'])})
-          AND i.Year IS NOT NULL
+          AND i.Year BETWEEN ? AND ?
           AND ({ac_sql})
-          AND e.Intern = 'Ekstern' AND e.Land IS NOT NULL AND e.Land != ''
+          AND e.Intern = 'Ekstern'
         GROUP BY i.Year, raw_land
         ORDER BY i.Year
     """
@@ -413,7 +425,7 @@ def _query_land_trend(filters):
         filters['fakultet'] + filters['institutter'] + filters['stillingsgrupper'] +
         filters['typer'] + filters['sprog'] +
         filters['peer'] + filters['indholdstyper'] + filters['open_access'] +
-        ac_params
+        [TREND_AAR_FRA, TREND_AAR_TIL] + ac_params
     )
     rows = get_cursor().execute(sql, params).fetchall()
 
@@ -435,6 +447,7 @@ def _query_year_totals(filters):
         SELECT Year, COUNT(DISTINCT PURE_ID) AS n
         FROM pubs
         WHERE Intern      = 'Intern'
+          AND HR_status   IN ('match', 'match_fallback')
           AND Fak         IN ({ph(filters['fakultet'])})
           AND Inst        IN ({ph(filters['institutter'])})
           AND Stil        IN ({ph(filters['stillingsgrupper'])})
@@ -444,7 +457,7 @@ def _query_year_totals(filters):
           AND Indholdstype IN ({ph(filters['indholdstyper'])})
           AND ({doi_filter_sql(filters['har_doi'])})
           AND COALESCE(Open_Access, 'Unknown') IN ({ph(filters['open_access'])})
-          AND Year IS NOT NULL
+          AND Year BETWEEN ? AND ?
           AND ({ac_sql})
         GROUP BY 1
     """
@@ -452,7 +465,7 @@ def _query_year_totals(filters):
         filters['fakultet'] + filters['institutter'] + filters['stillingsgrupper'] +
         filters['typer'] + filters['sprog'] +
         filters['peer'] + filters['indholdstyper'] + filters['open_access'] +
-        ac_params
+        [TREND_AAR_FRA, TREND_AAR_TIL] + ac_params
     )
     rows = get_cursor().execute(sql, params).fetchall()
     return {year: n for year, n in rows}
@@ -469,6 +482,7 @@ def _query_country_count_trend(filters):
         FROM pubs i
         JOIN pubs e ON i.PURE_ID = e.PURE_ID
         WHERE i.Intern      = 'Intern'
+          AND i.HR_status   IN ('match', 'match_fallback')
           AND i.Fak         IN ({ph(filters['fakultet'])})
           AND i.Inst        IN ({ph(filters['institutter'])})
           AND i.Stil        IN ({ph(filters['stillingsgrupper'])})
@@ -478,7 +492,7 @@ def _query_country_count_trend(filters):
           AND i.Indholdstype IN ({ph(filters['indholdstyper'])})
           AND ({doi_filter_sql(filters['har_doi']).replace('DOI', 'i.DOI')})
           AND COALESCE(i.Open_Access, 'Unknown') IN ({ph(filters['open_access'])})
-          AND i.Year IS NOT NULL
+          AND i.Year BETWEEN ? AND ?
           AND ({ac_sql})
           AND e.Intern = 'Ekstern' AND e.Land IS NOT NULL AND e.Land != '' AND e.Land != 'Unknown'
     """
@@ -486,7 +500,7 @@ def _query_country_count_trend(filters):
         filters['fakultet'] + filters['institutter'] + filters['stillingsgrupper'] +
         filters['typer'] + filters['sprog'] +
         filters['peer'] + filters['indholdstyper'] + filters['open_access'] +
-        ac_params
+        [TREND_AAR_FRA, TREND_AAR_TIL] + ac_params
     )
     rows = get_cursor().execute(sql, params).fetchall()
 
@@ -646,6 +660,42 @@ Fanen bygger for nu udelukkende på CURIS' registrering af medforfatteres landet
 koble samarbejdet til specifikke institutiner via OpenAlex og SciVal er under udvikling. 
 """)
 
+    mode = filters.get("mode", "F")
+
+    st.markdown(
+"""
+---
+
+#### Eksternt samarbejde pr. enhed
+
+Sektionen viser, hvor mange af KU's publikationer der har mindst én ekstern
+medforfatter, fordelt på de valgte organisatoriske niveauer - samt, i den sidste fane,
+hvor mange forskellige lande hver enhed samarbejder med.
+""")
+
+    _tab_ekst_n, _tab_ekst_p, _tab_ekst_r, _tab_ekst_lande = st.tabs(
+        ["Antal", "Andel (%)", "Rate (pr. forfatter)", "Antal samarbejdslande"]
+    )
+    _ekst_data, _ekst_cm = _query_section(filters, mode, _EXT_EXISTS_SQL)
+
+    with _tab_ekst_n:
+        _render_section(filters, mode, _ekst_data, _ekst_cm, "Eksternt samarbejde",
+                         order=EKST_ORDER, colors=EKST_COLORS, labels=EKST_LABELS, chart_mode="antal")
+    with _tab_ekst_p:
+        _render_section(filters, mode, _ekst_data, _ekst_cm, "Eksternt samarbejde",
+                         order=EKST_ORDER, colors=EKST_COLORS, labels=EKST_LABELS, chart_mode="pct")
+    with _tab_ekst_r:
+        _render_section(filters, mode, _ekst_data, _ekst_cm, "Eksternt samarbejde",
+                         order=EKST_ORDER, colors=EKST_COLORS, labels=EKST_LABELS, chart_mode="rate")
+    with _tab_ekst_lande:
+        _country_data, _country_cm = _query_country_count(filters, mode)
+        _country_wrapped = {u: {"Lande": n} for u, n in _country_data.items()}
+        _render_section(
+            filters, mode, _country_wrapped, _country_cm, "Antal samarbejdslande",
+            order=["Lande"], colors={"Lande": "#901a1e"}, labels={"Lande": "Antal lande"},
+            chart_mode="antal", xaxis_title="Antal lande", hover_unit="lande",
+        )
+
     st.markdown(
 """
 ---
@@ -679,7 +729,6 @@ i sidepanelet.
             + ", ".join(sorted(unmatched))
         )
 
-    mode = filters.get("mode", "F")
 
     st.markdown(
 """
@@ -716,39 +765,7 @@ samme land tælles kun med én gang.
         _render_section(filters, mode, _land_data, _land_cm, "Samarbejdslande",
                          chart_mode="rate", top_x=_topx_land, pct_denominators=_land_totals)
 
-    st.markdown(
-"""
----
-
-#### Eksternt samarbejde pr. enhed
-
-Sektionen viser, hvor mange af KU's publikationer der har mindst én ekstern
-medforfatter, fordelt på de valgte organisatoriske niveauer - samt, i den sidste fane,
-hvor mange forskellige lande hver enhed samarbejder med.
-""")
-
-    _tab_ekst_n, _tab_ekst_p, _tab_ekst_r, _tab_ekst_lande = st.tabs(
-        ["Antal", "Andel (%)", "Rate (pr. forfatter)", "Antal samarbejdslande"]
-    )
-    _ekst_data, _ekst_cm = _query_section(filters, mode, _EXT_EXISTS_SQL)
-
-    with _tab_ekst_n:
-        _render_section(filters, mode, _ekst_data, _ekst_cm, "Eksternt samarbejde",
-                         order=EKST_ORDER, colors=EKST_COLORS, labels=EKST_LABELS, chart_mode="antal")
-    with _tab_ekst_p:
-        _render_section(filters, mode, _ekst_data, _ekst_cm, "Eksternt samarbejde",
-                         order=EKST_ORDER, colors=EKST_COLORS, labels=EKST_LABELS, chart_mode="pct")
-    with _tab_ekst_r:
-        _render_section(filters, mode, _ekst_data, _ekst_cm, "Eksternt samarbejde",
-                         order=EKST_ORDER, colors=EKST_COLORS, labels=EKST_LABELS, chart_mode="rate")
-    with _tab_ekst_lande:
-        _country_data, _country_cm = _query_country_count(filters, mode)
-        _country_wrapped = {u: {"Lande": n} for u, n in _country_data.items()}
-        _render_section(
-            filters, mode, _country_wrapped, _country_cm, "Antal samarbejdslande",
-            order=["Lande"], colors={"Lande": "#901a1e"}, labels={"Lande": "Antal lande"},
-            chart_mode="antal", xaxis_title="Antal lande", hover_unit="lande",
-        )
+    
     
 
     _land_trend_label = _current_unit_label(filters)
@@ -762,7 +779,7 @@ f"""
 
 #### Udvikling over tid
 
-Graferne nedenfor dækker altid hele den tilgængelige periode, uanset sidepanelets
+Graferne nedenfor dækker altid {TREND_AAR_FRA}-{TREND_AAR_TIL}, uanset sidepanelets
 valgte årsinterval - øvrige filtre gælder stadig, inklusiv valg af fakultet/institut. Er intet
 valgt i sidepanelet, dækker graferne hele KU; er f.eks. kun HUM valgt, viser graferne udelukkende
 udviklingen for HUM. 

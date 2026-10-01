@@ -80,6 +80,7 @@ def _query_section(filters, mode, category_sql):
 
     where_sql = f"""
         WHERE Intern      = 'Intern'
+          AND HR_status   IN ('match', 'match_fallback')
           AND Fak         IN ({ph(filters['fakultet'])})
           AND Inst        IN ({ph(filters['institutter'])})
           AND Stil        IN ({ph(filters['stillingsgrupper'])})
@@ -147,6 +148,7 @@ def _query_trend(filters, category_sql):
         SELECT Year, ({category_sql}) AS cat, COUNT(DISTINCT PURE_ID) AS n
         FROM pubs
         WHERE Intern      = 'Intern'
+          AND HR_status   IN ('match', 'match_fallback')
           AND Fak         IN ({ph(filters['fakultet'])})
           AND Inst        IN ({ph(filters['institutter'])})
           AND Stil        IN ({ph(filters['stillingsgrupper'])})
