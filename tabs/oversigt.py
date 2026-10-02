@@ -392,7 +392,7 @@ Forfatterprofil for detaljer. **Internationalt samarbejde** angiver andelen af p
 medforfatter fra et andet land end Danmark; danske eksterne samarbejdspartnere (f.eks. andre universiteter eller 
 hospitaler) tæller ikke med i dette tal. 
 
-**Eksempel**: Er 'Internationalt samarbejde' 35 %, betyder det, at 30 % af publikationer har mindst én medforfatter
+**Eksempel**: Er 'Internationalt samarbejde' 35 %, betyder det, at 35 % af publikationer har mindst én medforfatter
 fra et andet land end Danmark - ikke at 35 % af alle medforfattere er udenlandske. 
 
 ---

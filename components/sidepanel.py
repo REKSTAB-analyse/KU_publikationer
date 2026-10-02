@@ -204,7 +204,13 @@ publikationstype eller tilføje en diversitetsdimension.
             )
             MIN_FORFATTERE = 1  # publikationer med 0 forfattere giver ikke mening i analyserne
 
-            max_forf_i_data = load_max_author_count(data_source, filters)
+            max_forf_i_data = load_max_author_count(data_source, {
+                "fakultet": FAC_ORDER, "institutter": institut_opts or ["__INGEN_INSTITUT__"],
+                "stillingsgrupper": STILLINGSGRUPPER, "typer": opts["typer"],
+                "sprog": sprog_opts, "peer": ["Ja", "Nej", "Ukendt"],
+                "indholdstyper": opts["indholds"], "open_access": oa_display_values + ["", "Unknown"],
+                "har_doi": ["Ja", "Nej"], "aar_fra": filters["aar_fra"], "aar_til": filters["aar_til"],
+            })
             max_forf_i_data = max(max_forf_i_data, MIN_FORFATTERE)  # undgår negativ/tom range
 
             if max_forf_i_data <= MIN_FORFATTERE:

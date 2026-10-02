@@ -257,35 +257,31 @@ def _unit_pairs_extra_filter(niveau, kun_tvaerfakultaert):
 
 @st.cache_data(show_spinner="Henter data...")
 def _query_unit_pairs(filters, metric, niveau, kun_tvaerfakultaert=False):
-    """Antal forfatterpar/publikationer PR. PAR AF FORSKELLIGE enheder (fx
-    SCIENCE-SUND, eller to institutter), rækkefølge-uafhængigt - A-B og B-A
-    summeres sammen. Kun par, hvor de to enheder er FORSKELLIGE, indgår.
-    Filtrering af niveau/tværfakultært sker via _unit_pairs_extra_filter."""
     col_1, col_2 = _NIVEAU_UNIT_COLS[niveau]
     where_sql, params = _top_units_base_where(filters)
-
     count_expr = (
         "COUNT(*)" if metric == "forfatterpar"
         else "COUNT(DISTINCT PURE_ID)"
     )
-    extra_filter, extra_params = _unit_pairs_extra_filter(niveau, kun_tvaerfakultaert)
-
+    extra_filter, extra_params = _unit_pairs_extra_filter(
+        niveau, kun_tvaerfakultaert
+    )
+    swap = f"{col_1} > {col_2}"
+    sel_u1 = f"CASE WHEN {swap} THEN {col_2} ELSE {col_1} END AS u1"
+    sel_u2 = f"CASE WHEN {swap} THEN {col_1} ELSE {col_2} END AS u2"
     sql = f"""
-        SELECT {col_1} AS u1, {col_2} AS u2, {count_expr} AS n
+        SELECT {sel_u1}, {sel_u2}, {count_expr} AS n
         FROM pairs
         {where_sql}
           AND {col_1} != '' AND {col_2} != '' AND {col_1} != {col_2}
           {extra_filter}
-        GROUP BY {col_1}, {col_2}
+        GROUP BY 1, 2
     """
     data_source = filters.get("data_source", "CURIS")
-    rows = get_pairs_cursor(data_source).execute(sql, params + extra_params).fetchall()
-
-    result = {}
-    for u1, u2, n in rows:
-        key = tuple(sorted([u1, u2]))
-        result[key] = result.get(key, 0) + n
-    return result
+    rows = get_pairs_cursor(data_source).execute(
+        sql, params + extra_params
+    ).fetchall()
+    return {(u1, u2): n for u1, u2, n in rows}
 
 def _unit_pairs_change_data(filters, metric, niveau, kun_tvaerfakultaert=False):
     """Par-udvikling mellem sidepanelets valgte start- og slutår
@@ -315,35 +311,33 @@ def _unit_pairs_change_data(filters, metric, niveau, kun_tvaerfakultaert=False):
 
 @st.cache_data(show_spinner="Henter data...")
 def _query_unit_pairs_trend(filters, metric, niveau, kun_tvaerfakultaert=False):
-    """Samme klassificering som _query_unit_pairs, men ÅR FOR ÅR over HELE
-    perioden - ignorerer bevidst sidepanelets årsinterval, øvrige filtre
-    gælder stadig. Henter ALLE kvalificerende par (ikke kun top X), så både
-    selve top X-parrenes udvikling OG en korrekt totalnævner til Andel (%)
-    kan udledes i Python bagefter."""
     col_1, col_2 = _NIVEAU_UNIT_COLS[niveau]
     where_sql, params = _top_units_base_where_alltime(filters)
     count_expr = (
         "COUNT(*)" if metric == "forfatterpar"
         else "COUNT(DISTINCT PURE_ID)"
     )
-    extra_filter, extra_params = _unit_pairs_extra_filter(niveau, kun_tvaerfakultaert)
-
+    extra_filter, extra_params = _unit_pairs_extra_filter(
+        niveau, kun_tvaerfakultaert
+    )
+    swap = f"{col_1} > {col_2}"
+    sel_u1 = f"CASE WHEN {swap} THEN {col_2} ELSE {col_1} END AS u1"
+    sel_u2 = f"CASE WHEN {swap} THEN {col_1} ELSE {col_2} END AS u2"
     sql = f"""
-        SELECT Year, {col_1} AS u1, {col_2} AS u2, {count_expr} AS n
+        SELECT Year, {sel_u1}, {sel_u2}, {count_expr} AS n
         FROM pairs
         {where_sql}
           AND {col_1} != '' AND {col_2} != '' AND {col_1} != {col_2}
           {extra_filter}
-        GROUP BY Year, {col_1}, {col_2}
+        GROUP BY 1, 2, 3
     """
     data_source = filters.get("data_source", "CURIS")
-    rows = get_pairs_cursor(data_source).execute(sql, params + extra_params).fetchall()
-
+    rows = get_pairs_cursor(data_source).execute(
+        sql, params + extra_params
+    ).fetchall()
     result = {}
     for year, u1, u2, n in rows:
-        key = tuple(sorted([u1, u2]))
-        year_dict = result.setdefault(year, {})
-        year_dict[key] = year_dict.get(key, 0) + n
+        result.setdefault(year, {})[(u1, u2)] = n
     return result
 
 @st.cache_data(show_spinner=False)
@@ -507,7 +501,10 @@ def _render_unit_pairs_trend(filters, metric, niveau, kun_tvaerfakultaert, top_p
     trend_data = {}
     for year in years_sorted:
         cats = trend_data_all.get(year, {})
-        trend_data[year] = {pair_labels[key]: cats.get(key, 0) for key in top_pair_keys}
+        trend_data[year] = {
+            pair_labels[key]: cats.get(key, cats.get((key[1], key[0]), 0))
+            for key in top_pair_keys
+        }
 
     palette = ku_color_sequence(len(top_pair_keys))
     colors = {pair_labels[key]: palette[i] for i, key in enumerate(top_pair_keys)}
@@ -1043,7 +1040,7 @@ def _render_internt_samarbejde_export_alle_enheder(filters):
     else:
         niveau, enhedsnavn = "fak", "alle fakulteter"
 
-    with st.expander(f"Download: Internt samarbejde for {enhedsnavn} (uanset sidepanelets fakultet-/institutvalg)"):
+    with st.expander(f"Se tabel for internt samarbejde på {enhedsnavn}"):
         st.caption(
             "Viser Internt samarbejde, Solo (ingen medforfattere) og Solo (internt + eksternt) "
             "for hver enhed for sig - uafhængigt af hvilke(t) fakultet(er)/institut(ter), der "
@@ -1132,7 +1129,7 @@ def _query_intra_inter_alle_enheder(filters, niveau, metric):
 
 def _render_intra_inter_export_alle_enheder(filters, metric, niveau):
     enhedsnavn = _NIVEAU_ENHEDSNAVN[niveau]
-    with st.expander(f"Download: Intra/inter for {enhedsnavn} (uanset sidepanelets valg)"):
+    with st.expander(f"Se tabel for intra-/intersamarbejde på {enhedsnavn}"):
         st.caption(
             "Viser Intra og Inter for hver enhed for sig, uafhængigt af hvilke(t) "
             "fakultet(er)/institut(ter)/stillingsgruppe(r), der lige nu er valgt i "
@@ -1616,6 +1613,8 @@ konsortium-artikler vejer tungere end små.
         _niveauer_at_vise = ["stil"]
     elif filters.get('institutter_explicit', False) and _vis_inst_par:
         _niveauer_at_vise = ["inst"]
+    elif _vis_inst_par:
+        _niveauer_at_vise = (["fak"] if _vis_fak_par else []) + ["inst"]
     elif filters.get('fakultet_explicit', False) and _vis_fak_par:
         _niveauer_at_vise = ["fak"]
     else:
@@ -1746,7 +1745,7 @@ Begge eksempler ovenfor kan selvfølgelig kombineres.
 
     st.markdown(
 """
-#### Top-x samarbejdspar
+### Top-x samarbejdspar
 
 Rangerer de fakultet- eller institutpar, der samarbejdet mest. 'Antal' tæller hver publikation/forfatterpar, 
 der krydser fakultets- eller institutskellet; 'Andel' angiver, hvor stor en del af **alt** tværgående
@@ -1757,7 +1756,7 @@ valg.
 
     for _niveau in _niveauer_at_vise:
         if len(_niveauer_at_vise) > 1:
-            st.markdown(f"###### {_niveau_overskrift[_niveau]}")
+            st.markdown(f"#### {_niveau_overskrift[_niveau]}")
         _render_unit_pairs(filters, _metric_arg, _niveau)
     
     st.markdown("---")
