@@ -658,6 +658,11 @@ I modsætning til appens øvrige faner handler denne ikke om at analysere KU's p
 men derimod om selve **grundlaget**, de øvrige analyser hviler på: hvor kommer data fra, 
 hvordan hænger datakilderne sammen, og hvor godt dækker de hinanden?
 
+**Dataafgrænsning**: Databehandlingen filtrerer ikke publikationer på Synlighed, 
+Valideringsstatus eller Publikationsstatus - alt, CURIS har registreret, føres
+uændret igennem til den endelige fil; den eneste afgrænsning sker i selve appen,
+via sidepanelets filtre og kravet om en HR-matchet forfatter (se HR-kobling nedenfor).
+
 **CURIS** er KU's egen registrering af publikationer - alt starter her, uafhængigt af DOI
 eller ekstern matchning. **OpenAlex** og **SciVal/Scopus** er begge **eksterne** kilder, 
 som appen beriger med CURIS-data ved at slå CURIS' DOI'er op i hver database - de kan 

@@ -671,6 +671,8 @@ koble samarbejdet til specifikke institutiner via OpenAlex og SciVal er under ud
 Sektionen viser, hvor mange af KU's publikationer der har mindst én ekstern
 medforfatter, fordelt på de valgte organisatoriske niveauer - samt, i den sidste fane,
 hvor mange forskellige lande hver enhed samarbejder med.
+
+**Andel (%) angiver andelen af enhedens publikationer, ikke andelen af forfattere.**
 """)
 
     _tab_ekst_n, _tab_ekst_p, _tab_ekst_r, _tab_ekst_lande = st.tabs(
@@ -735,8 +737,6 @@ i sidepanelet.
 Figurene nedenfor viser, hvilke lande KU's eksterne medforfattere kommer fra, fordelt på de valgte organisatoriske
 enheder - samme opgørelse som kortet ovenfor, bare brudt ned per enhed. **'Ukendt'** dækker eksterne
 medforfattere, hvor landetilknytning ikke er registreret i CURIS.
-
-**Andel (%) angiver andelen af enhedens publikationer, ikke andelen af forfattere.**
 
 **Eksempel**: 1 % Storbritannien for SCIENCE betyder, at 1 % af SCIENCE's publikationer har mindst én
 ekstern medforfatter fra Storbritannien - ikke at 1 % af alle forfattere (interne og eksterne

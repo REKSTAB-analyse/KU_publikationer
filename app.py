@@ -35,25 +35,25 @@ def main():
         _sync_figurer_from_erda()
 
 
-    #if "popup_bekraeftet" not in st.session_state:
-        #st.session_state.popup_bekraeftet = False
+    if "popup_bekraeftet" not in st.session_state:
+        st.session_state.popup_bekraeftet = False
 
-    #@st.dialog("Velkommen til KU Publikationer")
-    #def _velkomst_popup():
-        #st.markdown(
-#"""
-#Forfatternes organisatoriske tilknytning (fakultet, institut, stillingsgruppe) er
-#baseret på HR-data, ikke selve publikationsdata. Det betyder, at tallene ikke
-#nødvendigvis stemmer overens med de tal, du bliver præsenteret for i andre KU-kilder.
-#"""
-        #)
-        #if st.button("OK", type="primary"):
-            #st.session_state.popup_bekraeftet = True
-            #st.rerun()
+    @st.dialog("Velkommen til KU Publikationer")
+    def _velkomst_popup():
+        st.markdown(
+"""
+Forfatternes organisatoriske tilknytning (fakultet, institut, stillingsgruppe) er
+baseret på HR-data, ikke selve publikationsdata. Det betyder, at tallene ikke
+nødvendigvis stemmer overens med de tal, du bliver præsenteret for i andre KU-kilder.
+"""
+        )
+        if st.button("OK", type="primary"):
+            st.session_state.popup_bekraeftet = True
+            st.rerun()
 
-    #if not st.session_state.popup_bekraeftet:
-        #_velkomst_popup()
-        #st.stop()
+    if not st.session_state.popup_bekraeftet:
+        _velkomst_popup()
+        st.stop()
 
     # --- Skriftstørrelse i widgets (undtagen sidepanelet) ---
     st.markdown(
@@ -165,29 +165,29 @@ Hold musen over hver boks for at se de præcise tal.
     with tabs_dict["Oversigt"]:
         tab_oversigt.render(filters)
     
-    #with tabs_dict["Publikationsformer"]:
-        #tab_pubformer.render(filters)
+    with tabs_dict["Publikationsformer"]:
+        tab_pubformer.render(filters)
     
-    #with tabs_dict["Forfatterprofil"]:
-        #tab_forfatterprofil.render(filters)
+    with tabs_dict["Forfatterprofil"]:
+        tab_forfatterprofil.render(filters)
     
-    #with tabs_dict["Diversitet"]:
-        #tab_diversitet.render(filters)
+    with tabs_dict["Diversitet"]:
+        tab_diversitet.render(filters)
  
-    #with tabs_dict["Forskningsprofil"]:
-        #tab_forskningsprofil.render(filters)
+    with tabs_dict["Forskningsprofil"]:
+        tab_forskningsprofil.render(filters)
     
-    #with tabs_dict["Citationsimpact"]:
-        #tab_citationsimpact.render(filters)
+    with tabs_dict["Citationsimpact"]:
+        tab_citationsimpact.render(filters)
  
-    #with tabs_dict["Eksternt samarbejde"]:
-        #tab_eksternt.render(filters)
+    with tabs_dict["Eksternt samarbejde"]:
+        tab_eksternt.render(filters)
  
     with tabs_dict["Sampublicering"]:
         tab_sampublicering.render(filters)
     
-    #with tabs_dict["Datagrundlag"]:
-        #tab_datagrundlag.render(filters)
+    with tabs_dict["Datagrundlag"]:
+        tab_datagrundlag.render(filters)
     
     
     # Footer
