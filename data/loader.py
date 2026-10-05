@@ -186,7 +186,8 @@ def load_stillingsgruppe_loengrupper() -> dict:
     aldrig kan komme ud af trit med selve kildefilen. Returnerer
     {stillingsgruppe: [(løngruppenavn, løngruppenr), ...]}, sorteret efter
     løngruppenummer."""
-    path = "H:/Publikationsapp/Data/stillingsgrupper_løngrupper.csv"
+    _sync_parquet_from_erda()  # no-op efter 1. kald (st.cache_resource)
+    path = REFERENCE_TABLE_PATHS["stillingsgrupper_loengrupper"]
     by_stil = {}
     with open(path, encoding="utf-8-sig") as f:
         reader = csv.DictReader(f, delimiter=";")

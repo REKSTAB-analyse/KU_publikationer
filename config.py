@@ -18,6 +18,8 @@ if ERDA_ENABLED:
     REFERENCE_TABLE_PATHS = {
         "scival_topics": str(_DATA_CACHE_DIR / "SciVal_topics_reference.parquet"),
         "scival_asjc":   str(_DATA_CACHE_DIR / "SciVal_ASJC_reference.parquet"),
+        "stillingsgrupper_loengrupper":
+            str(_DATA_CACHE_DIR / "stillingsgrupper_løngrupper.csv"),
     }
 else:
     # Lokal udvikling: læs direkte fra dine egne, allerede byggede filer
@@ -30,6 +32,8 @@ else:
         "scival_topics": r"H:\Publikationsapp\Data\SciVal_topics_reference.parquet",
         "scival_asjc":   r"H:\Publikationsapp\Data\SciVal_ASJC_reference.parquet",
         "ku_pairs":      r"H:\Publikationsapp\Data\KU_pub_pairs_long.parquet",
+        "stillingsgrupper_loengrupper":
+            r"H:\Publikationsapp\Data\stillingsgrupper_løngrupper.csv",
     }
 
 if ERDA_ENABLED:
