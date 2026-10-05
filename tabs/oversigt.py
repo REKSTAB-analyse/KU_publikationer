@@ -10,6 +10,9 @@ from config import doi_filter_sql, author_count_filter, hier_cols, show_ku_samle
 from components.colors import build_faculty_colors, ku_color_sequence
 from components.charts import fig_year_trend, PLOTLY_CONFIG, _hls_gradient
 from components.export import render_table_export
+
+TREND_AAR_FRA = 2021
+TREND_AAR_TIL = 2025
  
 def _base_where_and_params(filters, alias=""):
     ph = lambda lst: ", ".join(["?" for _ in lst])
@@ -122,7 +125,7 @@ def _query_pub_trend(filters):
           AND Indholdstype IN ({ph(filters['indholdstyper'])})
           AND ({doi_filter_sql(filters['har_doi'])})
           AND COALESCE(Open_Access, 'Unknown') IN ({ph(filters['open_access'])})
-          AND Year IS NOT NULL
+          AND Year BETWEEN {TREND_AAR_FRA} AND {TREND_AAR_TIL}
           AND ({ac_sql})
     """
     params = (
@@ -176,7 +179,7 @@ def _query_author_trend(filters):
           AND Indholdstype IN ({ph(filters['indholdstyper'])})
           AND ({doi_filter_sql(filters['har_doi'])})
           AND COALESCE(Open_Access, 'Unknown') IN ({ph(filters['open_access'])})
-          AND Year IS NOT NULL
+          AND Year BETWEEN {TREND_AAR_FRA} AND {TREND_AAR_TIL}
           AND ({ac_sql})
     """
     params = (
@@ -410,11 +413,11 @@ hele KU; er f.eks. kun HUM valgt, viser graferne udelukkende udviklingen for HUM
 
     _tab_pub, _tab_auth, _tab_ratio = st.tabs(["Publikationer", "Forfattere", "Publikationer pr. forfatter"])
     with _tab_pub:
-        _render_org_trend(pub_trend, "Antal publikationer over tid (hele perioden)", key_suffix="pub", yaxis_title="Antal publikationer")
+        _render_org_trend(pub_trend, f"Antal publikationer over tid, {TREND_AAR_FRA}-{TREND_AAR_TIL}", key_suffix="pub", yaxis_title="Antal publikationer")
     with _tab_auth:
-        _render_org_trend(author_trend, "Antal forfattere over tid (hele perioden)", key_suffix="auth", yaxis_title="Antal forfattere")
+        _render_org_trend(author_trend, f"Antal forfattere over tid, {TREND_AAR_FRA}-{TREND_AAR_TIL}", key_suffix="auth", yaxis_title="Antal forfattere")
     with _tab_ratio:
-        _render_ratio_trend(pub_trend, author_trend, "Publikationer pr. forfatter over tid (hele perioden)", key_suffix="ratio")
+        _render_ratio_trend(pub_trend, author_trend, f"Publikationer pr. forfatter over tid, {TREND_AAR_FRA}-{TREND_AAR_TIL}", key_suffix="ratio")
     
     st.markdown(
 """
