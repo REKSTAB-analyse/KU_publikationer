@@ -17,6 +17,20 @@ TREND_AAR_TIL = 2025
 _NIVEAU_EDGE_COL = {"fak": "Edge_type_fak", "inst": "Edge_type_inst", "stil": "Edge_type_stil"}
 _NIVEAU_LABEL = {"fak": "fakultet", "inst": "institut", "stil": "stillingsgruppe"}
 
+def _verificerede_par_sql():
+    """Krav til BEGGE parter i et forfatterpar: fakultetet skal være et
+    af de seks (FAC_ORDER), instituttet skal være udfyldt, og
+    stillingsgruppen skal være kendt (ikke 'Ukendt'). Solo-rækker har
+    ingen part 2 og kræver derfor kun det samme af part 1."""
+    seks = ", ".join(f"'{f}'" for f in FAC_ORDER)  # faste konstanter
+    begge = (f"(Fak_1 IN ({seks}) AND Inst_1 != '' "
+             f"AND Stil_1 != 'Ukendt' "
+             f"AND Fak_2 IN ({seks}) AND Inst_2 != '' "
+             f"AND Stil_2 != 'Ukendt')")
+    solo = (f"(Edge_type_fak = 'solo' AND Fak_1 IN ({seks}) "
+            f"AND Inst_1 != '' AND Stil_1 != 'Ukendt')")
+    return f"AND ({begge} OR {solo})"
+
 @st.cache_data(show_spinner="Henter data...")
 def _query_hr_exclusion_impact(filters):
     """Sammenligner antal INTERNE forfattere pr. publikation i pubs (alle,
@@ -787,6 +801,7 @@ def _kpi_base_where(filters):
                 (Fak_1 IN ({ph(filters['fakultet'])}) AND Inst_1 IN ({ph(filters['institutter'])}) AND Stil_1 IN ({ph(filters['stillingsgrupper'])}))
              OR (Fak_2 IN ({ph(filters['fakultet'])}) AND Inst_2 IN ({ph(filters['institutter'])}) AND Stil_2 IN ({ph(filters['stillingsgrupper'])}))
           )
+          {_verificerede_par_sql()}
     """
     params = (
         [filters['aar_fra'], filters['aar_til']] +
